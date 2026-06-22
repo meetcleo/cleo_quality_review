@@ -25,7 +25,9 @@ module CleoQualityReview
     #   @return [Array<String>] checks to exclude
     # @!attribute [r] changed
     #   @return [Boolean] whether to filter to changed files only
-    ParseResult = Struct.new(:format, :checks, :files, :exclude, :changed, :base, :log, :review_id, :review_file, keyword_init: true) do
+    # @!attribute [r] jobs
+    #   @return [Integer, nil] max checks to run in parallel, or nil to auto-size
+    ParseResult = Struct.new(:format, :checks, :files, :exclude, :changed, :base, :log, :review_id, :review_file, :jobs, keyword_init: true) do
       ##
       # @return [String] validated review_id
       # @raise [OptionParser::MissingArgument] if review_id is blank
@@ -64,6 +66,7 @@ module CleoQualityReview
       @log = false
       @review_id = nil
       @review_file = nil
+      @jobs = nil
     end
 
     ##
@@ -85,12 +88,13 @@ module CleoQualityReview
         log: log,
         review_id: review_id,
         review_file: review_file,
+        jobs: jobs,
       )
     end
 
     private
 
-    attr_reader :argv, :format, :checks, :files, :exclude, :changed, :base, :log, :review_id, :review_file
+    attr_reader :argv, :format, :checks, :files, :exclude, :changed, :base, :log, :review_id, :review_file, :jobs
 
     def parser
       OptionParser.new do |opts|
@@ -104,7 +108,14 @@ module CleoQualityReview
       register_check_options(opts)
       register_target_options(opts)
       register_output_options(opts)
+      register_jobs_option(opts)
       register_help_option(opts)
+    end
+
+    def register_jobs_option(opts)
+      opts.on("-j", "--jobs N", Integer, "Max checks to run in parallel (default: CPU cores)") do |value|
+        @jobs = value
+      end
     end
 
     def register_format_option(opts)

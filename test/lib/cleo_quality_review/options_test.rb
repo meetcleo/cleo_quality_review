@@ -131,5 +131,23 @@ module CleoQualityReview
 
       refute_predicate options, :log
     end
+
+    def test_parses_jobs_flag
+      options = Options.parse(["--jobs", "4"])
+
+      assert_equal 4, options.jobs
+    end
+
+    def test_parses_jobs_short_flag
+      options = Options.parse(["-j", "2"])
+
+      assert_equal 2, options.jobs
+    end
+
+    def test_jobs_defaults_to_nil
+      options = Options.parse([])
+
+      assert_nil options.jobs
+    end
   end
 end

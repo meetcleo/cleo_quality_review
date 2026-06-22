@@ -6,6 +6,7 @@ require "json"
 require_relative "changes_diff"
 require_relative "checks"
 require_relative "command_runner"
+require_relative "concurrent_executor"
 require_relative "git_diff_base"
 require_relative "run"
 require_relative "run_artifacts"
@@ -38,12 +39,15 @@ module CleoQualityReview
     # @param [#now] clock time source for timestamps
     # @param [CheckRegistry] check_registry registry for resolving check names
     # @param [#resolve, nil] base_resolver resolves an incremental base commit, or nil for the full diff
-    def initialize(options:, command_runner: CommandRunner.new, clock: Time, check_registry: Checks, base_resolver: nil)
+    # @param [ConcurrentExecutor] executor runs checks across a bounded thread pool
+    def initialize(options:, command_runner: CommandRunner.new, clock: Time, check_registry: Checks, base_resolver: nil,
+                   executor: ConcurrentExecutor.new(max_workers: options.jobs))
       @options = options
       @command_runner = command_runner
       @clock = clock
       @check_registry = check_registry
       @base_resolver = base_resolver
+      @executor = executor
     end
 
     ##
@@ -59,7 +63,7 @@ module CleoQualityReview
 
     private
 
-    attr_reader :options, :command_runner, :clock, :check_registry, :base_resolver
+    attr_reader :options, :command_runner, :clock, :check_registry, :base_resolver, :executor
 
     def epoch_milliseconds
       (clock.now.to_r * 1_000).to_i
@@ -131,7 +135,7 @@ module CleoQualityReview
     def run_checks(check_classes, ruby_files, timestamp)
       return [] if ruby_files.empty?
 
-      check_classes.map do |check_class|
+      executor.map(check_classes) do |check_class|
         check_class.new(command_runner: command_runner, timestamp: timestamp).run(ruby_files)
       end
     end

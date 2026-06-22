@@ -37,6 +37,26 @@ module CleoQualityReview
       end
     end
 
+    # Records calls under a mutex so it is safe to share across the threads
+    # spawned when several checks run in parallel.
+    ConcurrentFakeCommandRunner = Struct.new(:calls, :lock, keyword_init: true) do
+      def run(*command, env: {})
+        lock.synchronize { calls << command }
+        CleoQualityReview::CommandResult.new(stdout: response_for(command), stderr: "", status: CleoQualityReviewTestHelpers::Status.new(true))
+      end
+
+      private
+
+      def response_for(command)
+        case command
+        when ["git", "merge-base", "origin/main", "HEAD"] then "base-sha\n"
+        when ["git", "diff", "--name-only", "--diff-filter=ACMRT", "base-sha"] then "app/example.rb\n"
+        when ["git", "diff", "base-sha", "--", "app/example.rb"] then "diff --git a/app/example.rb b/app/example.rb\n"
+        else ""
+        end
+      end
+    end
+
     FakeCheckRegistry = Struct.new(:received_checks, keyword_init: true) do
       def resolve(checks)
         self.received_checks = checks
@@ -369,6 +389,22 @@ module CleoQualityReview
 
         assert_equal "Could not resolve quality review base ref: origin/missing", error.message
         refute_path_exists "tmp/quality_checks"
+      end
+    end
+
+    def test_runs_multiple_checks_in_parallel_and_aggregates_results_in_order
+      in_tmpdir do
+        FileUtils.mkdir_p("app")
+        File.write("app/example.rb", "# frozen_string_literal: true\n")
+
+        run = Runner.new(
+          options: Options::ParseResult.new(format: "agent", checks: ["fake", "other"], files: [], exclude: [], changed: false),
+          command_runner: ConcurrentFakeCommandRunner.new(calls: [], lock: Mutex.new),
+          clock: FakeClock.new(now: Time.at(123)),
+          check_registry: SelectableCheckRegistry.new,
+        ).run
+
+        assert_equal ["fake result", "other result"], run.results.map(&:result)
       end
     end
 
