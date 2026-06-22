@@ -61,10 +61,9 @@ module CleoQualityReview
     def test_caps_concurrency_at_max_workers
       started = Thread::Queue.new
       release = Thread::Queue.new
-      results = nil
 
       runner = Thread.new do
-        results = ConcurrentExecutor.new(max_workers: 2).map([1, 2, 3, 4]) do |item|
+        ConcurrentExecutor.new(max_workers: 2).map([1, 2, 3, 4]) do |item|
           started << item
           release.pop
           item
