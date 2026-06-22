@@ -7,6 +7,34 @@ require "cleo_quality_review/concurrent_executor"
 
 module CleoQualityReview
   class ConcurrentExecutorTest < Minitest::Test
+    # Coordinates a concurrent run so a test can observe how many items run at
+    # once: each mapped item reports that it started, then blocks until released.
+    Gate = Struct.new(:started, :release) do
+      def self.open
+        new(Thread::Queue.new, Thread::Queue.new)
+      end
+
+      # Run +executor.map+ on a background thread, gating each item on this Gate.
+      # @return [Thread] whose #value is the ordered map result
+      def run(executor, items, &block)
+        Thread.new do
+          executor.map(items) do |item|
+            started << item
+            release.pop
+            block.call(item)
+          end
+        end
+      end
+
+      def await_started(count)
+        Timeout.timeout(5) { count.times { started.pop } }
+      end
+
+      def release_all(count)
+        count.times { release << :go }
+      end
+    end
+
     def test_returns_empty_array_for_empty_input
       assert_equal [], ConcurrentExecutor.new(max_workers: 4).map([]) { |item| item }
     end
@@ -39,44 +67,24 @@ module CleoQualityReview
     end
 
     def test_runs_items_concurrently_when_workers_available
-      started = Thread::Queue.new
-      release = Thread::Queue.new
-      results = nil
+      gate = Gate.open
+      runner = gate.run(ConcurrentExecutor.new(max_workers: 3), [1, 2, 3]) { |n| n * 10 }
+      gate.await_started(3)
+      gate.release_all(3)
 
-      runner = Thread.new do
-        results = ConcurrentExecutor.new(max_workers: 3).map([1, 2, 3]) do |item|
-          started << item
-          release.pop
-          item * 10
-        end
-      end
-
-      Timeout.timeout(5) { 3.times { started.pop } }
-      3.times { release << :go }
-      runner.join
-
-      assert_equal [10, 20, 30], results
+      assert_equal [10, 20, 30], runner.value
     end
 
     def test_caps_concurrency_at_max_workers
-      started = Thread::Queue.new
-      release = Thread::Queue.new
+      gate = Gate.open
+      runner = gate.run(ConcurrentExecutor.new(max_workers: 2), [1, 2, 3, 4]) { |item| item }
+      gate.await_started(2)
+      sleep(0.05) # let any surplus workers (a broken cap) start and signal
 
-      runner = Thread.new do
-        ConcurrentExecutor.new(max_workers: 2).map([1, 2, 3, 4]) do |item|
-          started << item
-          release.pop
-          item
-        end
-      end
-
-      Timeout.timeout(5) { 2.times { started.pop } }
-      sleep(0.05) # allow any (incorrect) surplus workers to start
-
-      assert_equal 0, started.size, "no more than max_workers items should run at once"
+      assert_equal 0, gate.started.size, "no more than max_workers items should run at once"
     ensure
-      4.times { release << :go }
-      runner&.join
+      gate.release_all(4)
+      runner&.value
     end
 
     def test_propagates_worker_exception

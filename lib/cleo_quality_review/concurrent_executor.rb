@@ -51,11 +51,11 @@ module CleoQualityReview
     # @param [Array] items work items to process
     # @yield [item] the work performed for each item
     # @return [Array] results aligned with +items+
-    def map(items)
+    def map(items, &block)
       return [] if items.empty?
-      return items.map { |item| yield item } if @max_workers <= 1 || items.size == 1
+      return items.map(&block) if serial?(items.size)
 
-      run_in_pool(items) { |item| yield item }
+      process(items, &block)
     end
 
     private
@@ -63,23 +63,56 @@ module CleoQualityReview
     attr_reader :max_workers
 
     ##
+    # Whether +item_count+ items should run serially rather than in a pool.
+    # @param [Integer] item_count number of work items
+    # @return [Boolean]
+    def serial?(item_count)
+      max_workers <= 1 || item_count == 1
+    end
+
+    ##
     # Distribute +items+ across a bounded pool of worker threads.
     # @param [Array] items work items to process
     # @yield [item] the work performed for each item
     # @return [Array] results aligned with +items+
-    def run_in_pool(items)
-      queue = work_queue(items)
+    def process(items, &block)
       results = Array.new(items.size)
-
-      workers = Array.new([max_workers, items.size].min) do
-        Thread.new do
-          Thread.current.report_on_exception = false
-          drain(queue) { |index, item| results[index] = yield(item) }
-        end
-      end
-
-      workers.each(&:join)
+      queue = work_queue(items)
+      run_workers(worker_count(results.size), queue, results, &block)
       results
+    end
+
+    ##
+    # Number of workers to spawn: one per item, capped at +max_workers+.
+    # @param [Integer] item_count number of work items
+    # @return [Integer]
+    def worker_count(item_count)
+      [max_workers, item_count].min
+    end
+
+    ##
+    # Spawn +count+ worker threads that drain +queue+ into +results+, and join them.
+    # @param [Integer] count number of worker threads
+    # @param [Thread::Queue] queue source of +[index, item]+ pairs
+    # @param [Array] results destination, written by index
+    # @yield [item] the work performed for each item
+    # @return [void]
+    def run_workers(count, queue, results, &block)
+      workers = Array.new(count) { spawn_worker(queue, results, &block) }
+      workers.each(&:join)
+    end
+
+    ##
+    # Spawn one worker thread that drains +queue+ into +results+ by index.
+    # @param [Thread::Queue] queue source of +[index, item]+ pairs
+    # @param [Array] results destination, written by index
+    # @yield [item] the work performed for each item
+    # @return [Thread]
+    def spawn_worker(queue, results)
+      Thread.new do
+        Thread.current.report_on_exception = false
+        drain(queue) { |index, item| results[index] = yield(item) }
+      end
     end
 
     ##
@@ -88,7 +121,7 @@ module CleoQualityReview
     # @return [Thread::Queue]
     def work_queue(items)
       queue = Thread::Queue.new
-      items.each_with_index { |item, index| queue << [index, item] }
+      items.size.times { |index| queue << [index, items[index]] }
       queue
     end
 
