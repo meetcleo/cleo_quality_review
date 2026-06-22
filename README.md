@@ -46,6 +46,15 @@ bundle add cleo_quality_review --group=development
 
 In your local environment, configure the ENV variable named `CLEO_QUALITY_REVIEW_OPEN_AI_KEY` with your own [OpenAI API key](https://platform.openai.com/api-keys).
 
+### Setting your API key
+
+Exporting the key from your shell config is the common way to persist an OpenAI API key for local use. Add it to `~/.zshrc` (zsh — the default shell on macOS) or `~/.bashrc` / `~/.bash_profile` (bash):
+
+```bash
+echo 'export CLEO_QUALITY_REVIEW_OPEN_AI_KEY="sk-..."' >> ~/.zshrc
+source ~/.zshrc   # reload now, or just open a new terminal
+```
+
 
 
 ## Usage 
