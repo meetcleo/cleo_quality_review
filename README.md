@@ -6,6 +6,11 @@
 
 Runs a suite of code quality tools against your code changes, and feeds them to an LLM to help make the feedback easier to apply.
 
+> [!IMPORTANT]
+> This tool uses an LLM (OpenAI) behind the scenes — every review sends your code and the quality
+> tool output to the OpenAI API. You provide your own API key
+> (`CLEO_QUALITY_REVIEW_OPEN_AI_KEY`), so **you incur your own token costs** for each run. It is your responsibility to understand how OpenAI billing works when using this tool.
+
 ## Use cases
 
 ### Review my own code locally before pushing
