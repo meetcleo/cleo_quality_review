@@ -127,6 +127,8 @@ module CleoQualityReview
     end
 
     def run_checks(check_classes, ruby_files, timestamp)
+      return [] if ruby_files.empty?
+
       check_classes.map do |check_class|
         check_class.new(command_runner: command_runner, timestamp: timestamp).run(ruby_files)
       end
