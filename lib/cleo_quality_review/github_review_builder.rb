@@ -95,12 +95,20 @@ module CleoQualityReview
     end
 
     def parsed_review
-      @parsed_review ||= begin
-        parsed = JSON.parse(rendered_review.to_s)
-        raise Error, "pr_review JSON must be an object" unless parsed.is_a?(Hash)
+      @parsed_review ||= parse_rendered_review
+    end
 
-        parsed
-      end
+    # A blank rendered review (e.g. the render step produced no output because
+    # there were no reviewable changes) means there is nothing to publish, so
+    # treat it as an empty review rather than failing to parse it as JSON.
+    def parse_rendered_review
+      content = rendered_review.to_s.strip
+      return {} if content.empty?
+
+      parsed = JSON.parse(content)
+      raise Error, "pr_review JSON must be an object" unless parsed.is_a?(Hash)
+
+      parsed
     rescue JSON::ParserError => e
       raise Error, "pr_review output was not valid JSON: #{e.message}"
     end

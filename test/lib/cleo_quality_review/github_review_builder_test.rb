@@ -19,6 +19,14 @@ module CleoQualityReview
       end
     end
 
+    def test_blank_rendered_review_is_treated_as_empty
+      in_tmpdir do
+        builder = GitHubReviewBuilder.new(run: run_with_findings, rendered_review: "")
+
+        assert_predicate builder, :empty?
+      end
+    end
+
     private
 
     def assert_inline_review_payload(payload)
