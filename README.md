@@ -70,13 +70,29 @@ CLEO_QUALITY_REVIEW_OPEN_AI_KEY=sk-... bundle exec check_quality --format human 
 CI can split analysis from output rendering so the Ruby quality tools run once and multiple outputs reuse the same artifacts:
 
 ```bash
-review_id="$(bundle exec check_quality analyze --checks all --changed)"
+# On a pull request, analyze reads the previously-reviewed commit from the PR to scope the diff,
+# so pass GITHUB_TOKEN here as well as to publish-pr-review.
+review_id="$(GITHUB_TOKEN=... bundle exec check_quality analyze --checks all --changed)"
 bundle exec check_quality render --format github --review-id "${review_id}"
 bundle exec check_quality render --format pr_review --review-id "${review_id}" > "tmp/quality_checks/${review_id}/pr_review.json"
 GITHUB_TOKEN=... bundle exec check_quality publish-pr-review --review-id "${review_id}"
 ```
 
 `analyze` prints the deterministic review ID for the captured diff. The artifact directory is `tmp/quality_checks/<review_id>/`, and later commands reuse it when `complete.json` is present.
+
+## Incremental re-review on pull requests
+
+On a pull request that has already been reviewed, `analyze` diffs against the most recent commit it previously reviewed rather than against `origin/main`.
+Only code changed since that review is re-analysed, so findings on unchanged code are not repeated on every push.
+The first review of a pull request still covers the whole diff.
+
+The previously-reviewed commit is read from the pull request's existing reviews via the GitHub API.
+The `analyze` step therefore needs `GITHUB_TOKEN` in its environment, alongside the `GITHUB_EVENT_PATH` and `GITHUB_REPOSITORY` variables that GitHub Actions provides automatically.
+Without a token, or outside a pull request, `analyze` falls back to the full `origin/main` diff.
+
+If a force-push rewrites the branch, the newest previously-reviewed commit that is still an ancestor of `HEAD` is used, and the review falls back to the full diff when none survive.
+
+Set `CLEO_QUALITY_REVIEW_INCREMENTAL=0` (or `false`, `no`, `off`) to disable incremental re-review and always analyse the full diff.
 
 ## Checks
 
@@ -185,8 +201,13 @@ flowchart LR
     StubProvider --> StubClient["Stub::Client"]:::neutral
     StubProvider --> StubConfig
 
+    Runner --> IncrementalBaseResolver["IncrementalBaseResolver"]:::rounded
+    IncrementalBaseResolver --> Git
+    IncrementalBaseResolver --> GitHubClient["GitHubClient"]:::info
+
     GitHubReviewPublisher --> GitHubReviewBuilder["GitHubReviewBuilder"]:::rounded
-    GitHubReviewPublisher --> GitHubAPI["GitHub API"]:::info
+    GitHubReviewPublisher --> GitHubClient
+    GitHubClient --> GitHubAPI["GitHub API"]:::info
 
     classDef rounded fill:#F8F6F2,stroke:#AC9B98,stroke-width:2px,color:#47201C,rx:10,ry:10
     classDef positive fill:#E6F2C9,stroke:#51623A,stroke-width:2px,color:#28371A,rx:10,ry:10
@@ -196,3 +217,5 @@ flowchart LR
 ```
 
 All formats build a prompt from the run data and artifacts, then send it through the configured LLM provider. The selected format determines which prompt is loaded and therefore the output shape. The `publish-pr-review` subcommand uses `GitHubReviewPublisher` to post rendered reviews directly to GitHub pull requests.
+
+On a pull request, `Runner` uses `IncrementalBaseResolver` to scope the diff to changes made since the last review. Both it and `GitHubReviewPublisher` talk to the GitHub API through the shared `GitHubClient`.
