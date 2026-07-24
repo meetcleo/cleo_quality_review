@@ -6,6 +6,7 @@ require_relative "../cleo_quality_review"
 require_relative "command_runner"
 require_relative "formatter"
 require_relative "github_review_publisher"
+require_relative "incremental_base_resolver"
 require_relative "options"
 require_relative "runner"
 require_relative "run_artifacts"
@@ -58,7 +59,7 @@ module CleoQualityReview
 
     def run_one_shot(arguments)
       options = Options.parse(arguments)
-      run = Runner.new(options: options, command_runner: command_runner).run
+      run = build_runner(options).run
       output = Formatter.new(run: run, command_runner: command_runner).format
       print_output(output)
       0
@@ -70,9 +71,17 @@ module CleoQualityReview
 
     def run_analyze(arguments)
       options = Options.parse(arguments)
-      run = Runner.new(options: options, command_runner: command_runner).run
+      run = build_runner(options).run
       stdout.puts(run.review_id)
       0
+    end
+
+    def build_runner(options)
+      Runner.new(
+        options: options,
+        command_runner: command_runner,
+        base_resolver: IncrementalBaseResolver.new(command_runner: command_runner),
+      )
     end
 
     def run_render(arguments)
