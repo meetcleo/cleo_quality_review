@@ -11,6 +11,12 @@ module CleoQualityReview
   class RunnerTest < Minitest::Test
     FakeClock = Struct.new(:now, keyword_init: true)
 
+    FakeBaseResolver = Struct.new(:sha, keyword_init: true) do
+      def resolve(head: "HEAD")
+        sha
+      end
+    end
+
     FakeCommandRunner = Struct.new(:calls, keyword_init: true) do
       def run(*command, env: {})
         calls << command
@@ -133,6 +139,57 @@ module CleoQualityReview
 
         git_commands = command_runner.calls.select { |cmd| cmd.first == "git" }
         assert git_commands.any? { |cmd| cmd.include?("merge-base") }, "Should call git merge-base when no files provided"
+      end
+    end
+
+    def test_uses_the_incremental_base_when_the_resolver_returns_a_commit
+      in_tmpdir do
+        FileUtils.mkdir_p("app")
+        File.write("app/example.rb", "# frozen_string_literal: true\n")
+
+        command_runner = FakeCommandRunner.new(calls: [])
+        command_runner.define_singleton_method(:run) do |*command, env: {}|
+          calls << command
+          stdout = case command
+          when ["git", "merge-base", "reviewed-sha", "HEAD"] then "reviewed-sha\n"
+          when ["git", "diff", "--name-only", "--diff-filter=ACMRT", "reviewed-sha"] then "app/example.rb\n"
+          when ["git", "diff", "reviewed-sha", "--", "app/example.rb"] then "diff --git a/app/example.rb b/app/example.rb\n"
+          else ""
+          end
+          CleoQualityReview::CommandResult.new(stdout: stdout, stderr: "", status: CleoQualityReviewTestHelpers::Status.new(true))
+        end
+
+        runner = Runner.new(
+          options: Options::ParseResult.new(format: "agent", checks: ["fake"], files: [], exclude: [], changed: false),
+          command_runner: command_runner,
+          clock: FakeClock.new(now: Time.at(123)),
+          check_registry: FakeCheckRegistry.new,
+          base_resolver: FakeBaseResolver.new(sha: "reviewed-sha"),
+        )
+
+        runner.run
+
+        assert_includes command_runner.calls, ["git", "merge-base", "reviewed-sha", "HEAD"]
+      end
+    end
+
+    def test_falls_back_to_the_default_base_when_the_resolver_returns_nil
+      in_tmpdir do
+        FileUtils.mkdir_p("app")
+        File.write("app/example.rb", "# frozen_string_literal: true\n")
+
+        command_runner = FakeCommandRunner.new(calls: [])
+        runner = Runner.new(
+          options: Options::ParseResult.new(format: "agent", checks: ["fake"], files: [], exclude: [], changed: false),
+          command_runner: command_runner,
+          clock: FakeClock.new(now: Time.at(123)),
+          check_registry: FakeCheckRegistry.new,
+          base_resolver: FakeBaseResolver.new(sha: nil),
+        )
+
+        runner.run
+
+        assert_includes command_runner.calls, ["git", "merge-base", "origin/main", "HEAD"]
       end
     end
 

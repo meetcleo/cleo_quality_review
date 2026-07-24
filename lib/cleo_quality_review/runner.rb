@@ -37,11 +37,13 @@ module CleoQualityReview
     # @param [CommandRunner] command_runner for executing shell commands
     # @param [#now] clock time source for timestamps
     # @param [CheckRegistry] check_registry registry for resolving check names
-    def initialize(options:, command_runner: CommandRunner.new, clock: Time, check_registry: Checks)
+    # @param [#resolve, nil] base_resolver resolves an incremental base commit, or nil for the full diff
+    def initialize(options:, command_runner: CommandRunner.new, clock: Time, check_registry: Checks, base_resolver: nil)
       @options = options
       @command_runner = command_runner
       @clock = clock
       @check_registry = check_registry
+      @base_resolver = base_resolver
     end
 
     ##
@@ -57,7 +59,7 @@ module CleoQualityReview
 
     private
 
-    attr_reader :options, :command_runner, :clock, :check_registry
+    attr_reader :options, :command_runner, :clock, :check_registry, :base_resolver
 
     def epoch_milliseconds
       (clock.now.to_r * 1_000).to_i
@@ -170,6 +172,10 @@ module CleoQualityReview
     end
 
     def base_ref
+      @base_ref ||= base_resolver&.resolve || default_base_ref
+    end
+
+    def default_base_ref
       options.base || GitDiffBase::DEFAULT_BASE_REF
     end
   end
