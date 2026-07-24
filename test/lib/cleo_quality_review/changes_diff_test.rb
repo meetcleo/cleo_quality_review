@@ -39,6 +39,20 @@ module CleoQualityReview
       assert_equal Digest::SHA256.hexdigest("diff content"), changes.review_id
     end
 
+    def test_empty_target_files_produce_empty_diff_without_running_git
+      command_runner = Runner.new(calls: [])
+      changes = ChangesDiff.new(target_files: [], command_runner: command_runner)
+
+      assert_equal "", changes.to_s
+      assert_empty command_runner.calls
+    end
+
+    def test_empty_target_files_review_id_is_hash_of_empty_diff
+      changes = ChangesDiff.new(target_files: [], command_runner: Runner.new(calls: []))
+
+      assert_equal Digest::SHA256.hexdigest(""), changes.review_id
+    end
+
     def test_uses_configured_base_ref_when_capturing_diff
       command_runner = Runner.new(calls: [])
       result = method(:command_result)

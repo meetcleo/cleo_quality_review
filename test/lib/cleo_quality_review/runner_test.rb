@@ -136,6 +136,28 @@ module CleoQualityReview
       end
     end
 
+    def test_skips_checks_when_no_files_changed
+      in_tmpdir do
+        command_runner = FakeCommandRunner.new(calls: [])
+        command_runner.define_singleton_method(:run) do |*command, env: {}|
+          calls << command
+          stdout = command == ["git", "merge-base", "origin/main", "HEAD"] ? "base-sha\n" : ""
+          CleoQualityReview::CommandResult.new(stdout: stdout, stderr: "", status: CleoQualityReviewTestHelpers::Status.new(true))
+        end
+        runner = Runner.new(
+          options: Options::ParseResult.new(format: "agent", checks: ["fake"], files: [], exclude: [], changed: true),
+          command_runner: command_runner,
+          clock: FakeClock.new(now: Time.at(123)),
+          check_registry: FakeCheckRegistry.new,
+        )
+
+        run = runner.run
+
+        assert_empty run.results
+        refute_includes command_runner.calls, ["fake"]
+      end
+    end
+
     def test_exclude_removes_specified_checks
       in_tmpdir do
         FileUtils.mkdir_p("app")
