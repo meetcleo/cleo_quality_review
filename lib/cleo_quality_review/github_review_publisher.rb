@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
 require "json"
-require "net/http"
-require "uri"
 
+require_relative "github_client"
 require_relative "github_review_builder"
 require_relative "llm_errors"
 
@@ -11,16 +10,16 @@ module CleoQualityReview
   ##
   # Publishes quality review findings as a GitHub pull request review
   class GitHubReviewPublisher
-    API_VERSION = "2022-11-28"
-
     ##
     # @param [Run] run completed quality review run
     # @param [String] rendered_review JSON produced by the pr_review formatter
     # @param [Hash{String => String}] env process environment
-    def initialize(run:, rendered_review:, env: ENV)
+    # @param [GitHubClient, nil] client GitHub API client (built from env when omitted)
+    def initialize(run:, rendered_review:, env: ENV, client: nil)
       @run = run
       @rendered_review = rendered_review
       @env = env
+      @client = client
     end
 
     ##
@@ -45,28 +44,26 @@ module CleoQualityReview
     end
 
     def post_review
-      response = request_json(:post, reviews_uri, builder.payload(commit_id: head_sha))
+      response = client.post(reviews_path, builder.payload(commit_id: head_sha))
       raise Error, "GitHub PR review publication failed with status #{response.status_code}: #{response.body}" unless response.success?
 
       "Published PR review for review ID #{run.review_id}."
     end
 
-    GitHubResponse = Struct.new(:status_code, :body, keyword_init: true) do
-      def success?
-        (200..299).cover?(status_code.to_i)
-      end
-    end
-
     attr_reader :env, :rendered_review, :run
 
     def already_published?
-      response = request_json(:get, reviews_uri)
+      response = client.get(reviews_path)
       body = response.body
       raise Error, "GitHub PR review lookup failed with status #{response.status_code}: #{body}" unless response.success?
 
       JSON.parse(body).any? do |review|
         review.fetch("body", "").include?(builder.marker)
       end
+    end
+
+    def client
+      @client ||= GitHubClient.new(token: token, api_url: api_url)
     end
 
     def builder
@@ -77,8 +74,8 @@ module CleoQualityReview
       event.fetch("pull_request", nil).is_a?(Hash)
     end
 
-    def reviews_uri
-      URI("#{api_url}/repos/#{repository}/pulls/#{pull_request_number}/reviews")
+    def reviews_path
+      "/repos/#{repository}/pulls/#{pull_request_number}/reviews"
     end
 
     def pull_request_number
@@ -103,48 +100,6 @@ module CleoQualityReview
 
     def token
       env.fetch("GITHUB_TOKEN")
-    end
-
-    def request_json(method, uri, body = nil)
-      wrap_response(perform_request(uri, build_request(method, uri, body)))
-    end
-
-    def build_request(method, uri, body)
-      request = request_class(method).new(uri)
-      apply_headers(request)
-      request.body = JSON.generate(body) if body
-      request
-    end
-
-    def request_class(method)
-      {
-        get: Net::HTTP::Get,
-        post: Net::HTTP::Post,
-      }.fetch(method) { raise ArgumentError, "Unsupported HTTP method #{method.inspect}" }
-    end
-
-    def apply_headers(request)
-      github_headers.each { |key, value| request[key] = value }
-    end
-
-    def github_headers
-      {
-        "Accept" => "application/vnd.github+json",
-        "Authorization" => "Bearer #{token}",
-        "Content-Type" => "application/json",
-        "User-Agent" => "cleo-quality-review",
-        "X-GitHub-Api-Version" => API_VERSION,
-      }
-    end
-
-    def perform_request(uri, request)
-      Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == "https") do |http|
-        http.request(request)
-      end
-    end
-
-    def wrap_response(response)
-      GitHubResponse.new(status_code: response.code.to_i, body: response.body.to_s)
     end
   end
 end
