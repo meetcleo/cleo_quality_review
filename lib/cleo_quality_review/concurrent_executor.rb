@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "etc"
+require_relative "configuration"
 
 module CleoQualityReview
   ##
@@ -17,33 +17,9 @@ module CleoQualityReview
   # workers make real progress.
   class ConcurrentExecutor
     ##
-    # Environment variable that overrides the auto-detected worker count.
-    ENV_VAR = "CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"
-
-    class << self
-      ##
-      # Resolve the worker count, honouring an explicit value, then the
-      # environment override, then the processor count.
-      # @param [Integer, nil] explicit explicit worker cap, or nil to auto-size
-      # @return [Integer] resolved worker count (at least 1)
-      def resolve_max_workers(explicit = nil)
-        [(explicit || env_max_workers || Etc.nprocessors).to_i, 1].max
-      end
-
-      ##
-      # Read the worker count from the environment, if set.
-      # @return [Integer, nil] the configured count, or nil when unset/blank
-      # @raise [ArgumentError] if the environment value is not an integer
-      def env_max_workers
-        value = ENV[ENV_VAR]
-        value && !value.strip.empty? ? Integer(value) : nil
-      end
-    end
-
-    ##
     # @param [Integer, nil] max_workers explicit worker cap, or nil to auto-size to cores
-    def initialize(max_workers: nil)
-      @max_workers = self.class.resolve_max_workers(max_workers)
+    def initialize(max_workers: Configuration.max_concurrency)
+      @max_workers = Configuration.max_concurrency_limit(max_workers)
     end
 
     ##

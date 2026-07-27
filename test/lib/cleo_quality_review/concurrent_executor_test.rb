@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative "../../test_helper"
-require "etc"
 require "timeout"
 require "cleo_quality_review/concurrent_executor"
 
@@ -87,6 +86,21 @@ module CleoQualityReview
       runner&.value
     end
 
+    def test_explicit_max_workers_takes_precedence_over_env
+      original = ENV[Configuration.max_concurrency_env_var]
+      ENV[Configuration.max_concurrency_env_var] = "1"
+      gate = Gate.open
+      runner = gate.run(ConcurrentExecutor.new(max_workers: 2), [1, 2]) { |item| item }
+      gate.await_started(2)
+      gate.release_all(2)
+
+      assert_equal [1, 2], runner.value
+    ensure
+      ENV[Configuration.max_concurrency_env_var] = original
+      gate&.release_all(2)
+      runner&.value
+    end
+
     def test_propagates_worker_exception
       error = assert_raises(RuntimeError) do
         ConcurrentExecutor.new(max_workers: 3).map([1, 2, 3]) do |n|
@@ -97,50 +111,6 @@ module CleoQualityReview
       end
 
       assert_includes error.message, "boom"
-    end
-
-    def test_resolve_prefers_explicit_value_over_env
-      original = ENV[ConcurrentExecutor::ENV_VAR]
-      ENV[ConcurrentExecutor::ENV_VAR] = "7"
-
-      assert_equal 3, ConcurrentExecutor.resolve_max_workers(3)
-    ensure
-      ENV[ConcurrentExecutor::ENV_VAR] = original
-    end
-
-    def test_resolve_uses_env_var_when_no_explicit_value
-      original = ENV[ConcurrentExecutor::ENV_VAR]
-      ENV[ConcurrentExecutor::ENV_VAR] = "7"
-
-      assert_equal 7, ConcurrentExecutor.resolve_max_workers
-    ensure
-      ENV[ConcurrentExecutor::ENV_VAR] = original
-    end
-
-    def test_resolve_ignores_blank_env_var
-      original = ENV[ConcurrentExecutor::ENV_VAR]
-      ENV[ConcurrentExecutor::ENV_VAR] = "   "
-
-      assert_equal Etc.nprocessors, ConcurrentExecutor.resolve_max_workers
-    ensure
-      ENV[ConcurrentExecutor::ENV_VAR] = original
-    end
-
-    def test_resolve_falls_back_to_processor_count
-      original = ENV[ConcurrentExecutor::ENV_VAR]
-      ENV.delete(ConcurrentExecutor::ENV_VAR)
-
-      assert_equal Etc.nprocessors, ConcurrentExecutor.resolve_max_workers
-    ensure
-      ENV[ConcurrentExecutor::ENV_VAR] = original
-    end
-
-    def test_resolve_clamps_zero_to_one
-      assert_equal 1, ConcurrentExecutor.resolve_max_workers(0)
-    end
-
-    def test_resolve_clamps_negative_to_one
-      assert_equal 1, ConcurrentExecutor.resolve_max_workers(-4)
     end
   end
 end

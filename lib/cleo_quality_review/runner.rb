@@ -6,6 +6,7 @@ require "json"
 require_relative "changes_diff"
 require_relative "checks"
 require_relative "command_runner"
+require_relative "configuration"
 require_relative "concurrent_executor"
 require_relative "git_diff_base"
 require_relative "run"
@@ -41,7 +42,7 @@ module CleoQualityReview
     # @param [#resolve, nil] base_resolver resolves an incremental base commit, or nil for the full diff
     # @param [ConcurrentExecutor] executor runs checks across a bounded thread pool
     def initialize(options:, command_runner: CommandRunner.new, clock: Time, check_registry: Checks, base_resolver: nil,
-                   executor: ConcurrentExecutor.new(max_workers: options.jobs))
+                   executor: ConcurrentExecutor.new(max_workers: options.jobs || Configuration.max_concurrency))
       @options = options
       @command_runner = command_runner
       @clock = clock
