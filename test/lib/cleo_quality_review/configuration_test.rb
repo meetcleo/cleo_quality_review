@@ -118,39 +118,39 @@ module CleoQualityReview
     end
 
     def test_max_concurrency_uses_env_var_when_set
-      original = ENV[Configuration.max_concurrency_env_var]
-      ENV[Configuration.max_concurrency_env_var] = "7"
+      original = ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"]
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = "7"
 
       assert_equal 7, Configuration.max_concurrency
     ensure
-      ENV[Configuration.max_concurrency_env_var] = original
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = original
     end
 
     def test_max_concurrency_ignores_blank_env_var
-      original = ENV[Configuration.max_concurrency_env_var]
-      ENV[Configuration.max_concurrency_env_var] = "   "
+      original = ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"]
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = "   "
 
       assert_equal Etc.nprocessors, Configuration.max_concurrency
     ensure
-      ENV[Configuration.max_concurrency_env_var] = original
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = original
     end
 
     def test_max_concurrency_falls_back_to_processor_count
-      original = ENV[Configuration.max_concurrency_env_var]
-      ENV.delete(Configuration.max_concurrency_env_var)
+      original = ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"]
+      ENV.delete("CLEO_QUALITY_REVIEW_MAX_CONCURRENCY")
 
       assert_equal Etc.nprocessors, Configuration.max_concurrency
     ensure
-      ENV[Configuration.max_concurrency_env_var] = original
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = original
     end
 
     def test_max_concurrency_fails_for_non_integer_env_var
-      original = ENV[Configuration.max_concurrency_env_var]
-      ENV[Configuration.max_concurrency_env_var] = "many"
+      original = ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"]
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = "many"
 
       assert_raises(ArgumentError) { Configuration.max_concurrency }
     ensure
-      ENV[Configuration.max_concurrency_env_var] = original
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = original
     end
 
     def test_max_concurrency_limit_clamps_zero_to_one

@@ -87,8 +87,8 @@ module CleoQualityReview
     end
 
     def test_explicit_max_workers_takes_precedence_over_env
-      original = ENV[Configuration.max_concurrency_env_var]
-      ENV[Configuration.max_concurrency_env_var] = "1"
+      original = ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"]
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = "1"
       gate = Gate.open
       runner = gate.run(ConcurrentExecutor.new(max_workers: 2), [1, 2]) { |item| item }
       gate.await_started(2)
@@ -96,7 +96,7 @@ module CleoQualityReview
 
       assert_equal [1, 2], runner.value
     ensure
-      ENV[Configuration.max_concurrency_env_var] = original
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = original
       gate&.release_all(2)
       runner&.value
     end

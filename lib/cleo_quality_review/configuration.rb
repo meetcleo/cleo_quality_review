@@ -41,17 +41,11 @@ module CleoQualityReview
     end
 
     ##
-    # @return [String] environment variable that overrides max concurrency
-    def self.max_concurrency_env_var
-      "CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"
-    end
-
-    ##
     # Read the max worker count from the environment, if configured.
     # @return [Integer, nil] the configured count, or nil when unset/blank
     # @raise [ArgumentError] if the environment value is not an integer
     def self.env_max_concurrency
-      value = ENV[max_concurrency_env_var]
+      value = ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"]
       value && !value.strip.empty? ? Integer(value) : nil
     end
 
