@@ -19,6 +19,8 @@ module CleoQualityReview
     REVIEW_MARKER_PREFIX = "<!-- cleo-quality-review:"
     DISABLED_VALUES = %w[0 false no off].freeze
     ENABLED_ENV_KEY = "CLEO_QUALITY_REVIEW_INCREMENTAL"
+    REVIEWS_PER_PAGE = 100
+    MAX_REVIEW_PAGES = 20
 
     ##
     # @param [CommandRunner] command_runner for executing git commands
@@ -35,8 +37,7 @@ module CleoQualityReview
     # @param [String] head git ref for the current head
     # @return [String, nil] commit SHA to diff against, or nil to review the full diff
     def resolve(head: "HEAD")
-      return nil unless enabled?
-      return nil unless pull_request_number && token && repository
+      return nil unless incremental_lookup_available?
 
       newest_reviewed_ancestor(head)
     rescue StandardError => error
@@ -47,6 +48,12 @@ module CleoQualityReview
     private
 
     attr_reader :command_runner, :env
+
+    ##
+    # @return [Boolean] whether an incremental lookup can run in this context
+    def incremental_lookup_available?
+      enabled? && !pull_request_number.nil? && !token.nil? && !repository.nil?
+    end
 
     def newest_reviewed_ancestor(head)
       reviewed_commit_ids.find { |sha| ancestor?(sha, head) }
@@ -62,16 +69,42 @@ module CleoQualityReview
         .uniq
     end
 
+    ##
+    # Fetch every submitted review, following pagination so the newest reviews
+    # are not missed on pull requests with more than one page of reviews.
+    # @return [Array<Hash>]
     def reviews
-      response = client.get("/repos/#{repository}/pulls/#{pull_request_number}/reviews?per_page=100")
+      (1..MAX_REVIEW_PAGES).each_with_object([]) do |page, all|
+        page_reviews = reviews_page(page)
+        all.concat(page_reviews)
+        break all if page_reviews.length < REVIEWS_PER_PAGE
+      end
+    end
+
+    def reviews_page(page)
+      response = client.get("/repos/#{repository}/pulls/#{pull_request_number}/reviews?per_page=#{REVIEWS_PER_PAGE}&page=#{page}")
       raise Error, "GitHub review lookup returned status #{response.status_code}" unless response.success?
 
       parsed = JSON.parse(response.body)
       parsed.is_a?(Array) ? parsed : []
     end
 
+    ##
+    # Only trust bot-authored reviews that carry our marker. A human contributor
+    # could otherwise forge the marker in their own review and steer the base
+    # past changes the tool never analysed.
+    # @param [Hash] review
+    # @return [Boolean]
     def quality_review?(review)
-      review.fetch("body", "").to_s.include?(REVIEW_MARKER_PREFIX)
+      bot_authored?(review) && marked?(review)
+    end
+
+    def bot_authored?(review)
+      review.dig("user", "type") == "Bot"
+    end
+
+    def marked?(review)
+      review.fetch("body") { "" }.to_s.include?(REVIEW_MARKER_PREFIX)
     end
 
     def ancestor?(sha, head)
@@ -79,7 +112,7 @@ module CleoQualityReview
     end
 
     def enabled?
-      !DISABLED_VALUES.include?(env.fetch(ENABLED_ENV_KEY, "").to_s.strip.downcase)
+      !DISABLED_VALUES.include?(env.fetch(ENABLED_ENV_KEY) { "" }.to_s.strip.downcase)
     end
 
     def pull_request_number
@@ -114,7 +147,7 @@ module CleoQualityReview
     end
 
     def api_url
-      env.fetch("GITHUB_API_URL", GitHubClient::DEFAULT_API_URL)
+      env.fetch("GITHUB_API_URL") { GitHubClient::DEFAULT_API_URL }
     end
 
     def client

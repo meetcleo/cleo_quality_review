@@ -15,6 +15,15 @@ module CleoQualityReview
       end
     end
 
+    # Returns a distinct body per page number parsed from the request path.
+    PaginatedReviewsClient = Struct.new(:pages, :requested_paths, keyword_init: true) do
+      def get(path)
+        requested_paths << path
+        page = path[/[?&]page=(\d+)/, 1].to_i
+        GitHubClient::Response.new(status_code: 200, body: pages[page] || "[]")
+      end
+    end
+
     FakeGit = Struct.new(:ancestors, :calls, keyword_init: true) do
       def run(*command, env: {})
         calls << command
@@ -115,7 +124,7 @@ module CleoQualityReview
 
     def test_ignores_reviews_without_a_commit_id
       in_tmpdir do |dir|
-        commitless = JSON.generate([{ "body" => "<!-- cleo-quality-review:x -->", "commit_id" => nil, "submitted_at" => "2026-07-01T09:00:00Z" }])
+        commitless = JSON.generate([{ "body" => "<!-- cleo-quality-review:x -->", "user" => { "type" => "Bot" }, "commit_id" => nil, "submitted_at" => "2026-07-01T09:00:00Z" }])
         resolver = build_resolver(
           env: base_env(dir),
           client: FakeReviewsClient.new(reviews_json: commitless, requested_paths: []),
@@ -143,7 +152,34 @@ module CleoQualityReview
         client = FakeReviewsClient.new(reviews_json: reviews_json, requested_paths: [])
         build_resolver(env: base_env(dir), client: client, git: FakeGit.new(ancestors: %w[sha2], calls: [])).resolve
 
-        assert_equal "/repos/owner/repo/pulls/42/reviews?per_page=100", client.requested_paths.first
+        assert_equal "/repos/owner/repo/pulls/42/reviews?per_page=100&page=1", client.requested_paths.first
+      end
+    end
+
+    def test_ignores_a_forged_marker_from_a_non_bot_review
+      in_tmpdir do |dir|
+        forged = JSON.generate([{ "body" => "<!-- cleo-quality-review:forged -->", "user" => { "type" => "User" }, "commit_id" => "forged-sha", "submitted_at" => "2026-07-01T10:00:00Z" }])
+        resolver = build_resolver(
+          env: base_env(dir),
+          client: FakeReviewsClient.new(reviews_json: forged, requested_paths: []),
+          git: FakeGit.new(ancestors: %w[forged-sha], calls: []),
+        )
+
+        assert_nil resolver.resolve
+      end
+    end
+
+    def test_follows_pagination_to_find_a_review_beyond_the_first_page
+      in_tmpdir do |dir|
+        first_page = JSON.generate(Array.new(100) { { "body" => "chatter", "user" => { "type" => "User" } } })
+        second_page = JSON.generate([{ "body" => "<!-- cleo-quality-review:late -->", "user" => { "type" => "Bot" }, "commit_id" => "sha-late", "submitted_at" => "2026-07-02T00:00:00Z" }])
+        resolver = build_resolver(
+          env: base_env(dir),
+          client: PaginatedReviewsClient.new(pages: { 1 => first_page, 2 => second_page }, requested_paths: []),
+          git: FakeGit.new(ancestors: %w[sha-late], calls: []),
+        )
+
+        assert_equal "sha-late", resolver.resolve
       end
     end
 
@@ -178,9 +214,9 @@ module CleoQualityReview
     def reviews_json
       JSON.generate(
         [
-          { "body" => "<!-- cleo-quality-review:aaa -->", "commit_id" => "sha1", "submitted_at" => "2026-07-01T10:00:00Z" },
-          { "body" => "Looks good to me", "commit_id" => "human-sha", "submitted_at" => "2026-07-01T11:00:00Z" },
-          { "body" => "<!-- cleo-quality-review:bbb -->", "commit_id" => "sha2", "submitted_at" => "2026-07-01T12:00:00Z" },
+          { "body" => "<!-- cleo-quality-review:aaa -->", "user" => { "type" => "Bot" }, "commit_id" => "sha1", "submitted_at" => "2026-07-01T10:00:00Z" },
+          { "body" => "Looks good to me", "user" => { "type" => "User" }, "commit_id" => "human-sha", "submitted_at" => "2026-07-01T11:00:00Z" },
+          { "body" => "<!-- cleo-quality-review:bbb -->", "user" => { "type" => "Bot" }, "commit_id" => "sha2", "submitted_at" => "2026-07-01T12:00:00Z" },
         ],
       )
     end
