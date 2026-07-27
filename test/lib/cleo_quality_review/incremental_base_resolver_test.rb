@@ -24,18 +24,17 @@ module CleoQualityReview
       end
     end
 
+    # Stubs `git merge-base --is-ancestor <sha> HEAD`, succeeding only for known ancestor SHAs.
     FakeGit = Struct.new(:ancestors, :calls, keyword_init: true) do
       def run(*command, env: {})
         calls << command
+        _git, subcommand, flag, sha, * = command
+        is_ancestor_query = [subcommand, flag] == %w[merge-base --is-ancestor]
         CleoQualityReview::CommandResult.new(
           stdout: "",
           stderr: "",
-          status: CleoQualityReviewTestHelpers::Status.new(ancestor?(command)),
+          status: CleoQualityReviewTestHelpers::Status.new(is_ancestor_query && ancestors.include?(sha)),
         )
-      end
-
-      def ancestor?(command)
-        command.first(3) == ["git", "merge-base", "--is-ancestor"] && ancestors.include?(command[3])
       end
     end
 
@@ -171,11 +170,10 @@ module CleoQualityReview
 
     def test_follows_pagination_to_find_a_review_beyond_the_first_page
       in_tmpdir do |dir|
-        first_page = JSON.generate(Array.new(100) { { "body" => "chatter", "user" => { "type" => "User" } } })
-        second_page = JSON.generate([{ "body" => "<!-- cleo-quality-review:late -->", "user" => { "type" => "Bot" }, "commit_id" => "sha-late", "submitted_at" => "2026-07-02T00:00:00Z" }])
+        pages = { 1 => full_page_of_non_quality_reviews, 2 => page_with_quality_review("sha-late") }
         resolver = build_resolver(
           env: base_env(dir),
-          client: PaginatedReviewsClient.new(pages: { 1 => first_page, 2 => second_page }, requested_paths: []),
+          client: PaginatedReviewsClient.new(pages: pages, requested_paths: []),
           git: FakeGit.new(ancestors: %w[sha-late], calls: []),
         )
 
@@ -219,6 +217,14 @@ module CleoQualityReview
           { "body" => "<!-- cleo-quality-review:bbb -->", "user" => { "type" => "Bot" }, "commit_id" => "sha2", "submitted_at" => "2026-07-01T12:00:00Z" },
         ],
       )
+    end
+
+    def full_page_of_non_quality_reviews
+      JSON.generate(Array.new(IncrementalBaseResolver::REVIEWS_PER_PAGE) { { "body" => "chatter", "user" => { "type" => "User" } } })
+    end
+
+    def page_with_quality_review(commit_id)
+      JSON.generate([{ "body" => "<!-- cleo-quality-review:late -->", "user" => { "type" => "Bot" }, "commit_id" => commit_id, "submitted_at" => "2026-07-02T00:00:00Z" }])
     end
   end
 end
