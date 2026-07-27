@@ -38,10 +38,13 @@ jobs:
           fetch-depth: 0
 
       - name: Prepare git comparison
+        env:
+          QUALITY_REVIEW_BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
           git rev-parse --is-inside-work-tree
-          git fetch --no-tags --prune origin +refs/heads/main:refs/remotes/origin/main
+          git fetch --no-tags --prune origin "+refs/heads/${QUALITY_REVIEW_BASE_REF}:refs/remotes/origin/${QUALITY_REVIEW_BASE_REF}"
+          echo "QUALITY_REVIEW_BASE_REF=${QUALITY_REVIEW_BASE_REF}" >> "${GITHUB_ENV}"
 
       - name: Detect review availability
         id: review_config
@@ -66,13 +69,13 @@ jobs:
           gem install bundler -v 4.0.10 --no-document
           bundle _4.0.10_ install --jobs 4 --retry 3
 
-      - name: Show files compared with main
-        run: git diff --name-only --diff-filter=ACMRT origin/main...HEAD
+      - name: Show files compared with the base branch
+        run: git diff --name-only --diff-filter=ACMRT "origin/${QUALITY_REVIEW_BASE_REF}...HEAD"
 
       - name: Analyze quality review
         id: analyze
         run: |
-          review_id="$(bundle exec check_quality analyze --checks all --changed)"
+          review_id="$(bundle exec check_quality analyze --checks all --changed --base "origin/${QUALITY_REVIEW_BASE_REF}")"
           echo "review_id=${review_id}" >> "${GITHUB_OUTPUT}"
           echo "Review ID: ${review_id}"
 
