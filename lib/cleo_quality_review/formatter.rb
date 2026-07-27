@@ -23,9 +23,13 @@ module CleoQualityReview
     end
 
     ##
-    # Format the run by generating an LLM review
-    # @return [String] formatted review text
+    # Format the run by generating an LLM review. Returns an empty string
+    # without contacting the LLM when there are no files to review.
+    # @return [String] formatted review text, or an empty string when there is
+    #   nothing to review
     def format
+      return "" unless run.reviewable?
+
       llm_client.generate_review(prompt)
     end
 

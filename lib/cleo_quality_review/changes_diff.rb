@@ -21,9 +21,10 @@ module CleoQualityReview
     end
 
     ##
-    # @return [String] combined tracked and untracked diff content
+    # @return [String] combined tracked and untracked diff content, or an empty
+    #   string when there are no target files to review
     def to_s
-      @to_s ||= [tracked_changes_diff, untracked_changes_diff].reject(&:empty?).join("\n")
+      @to_s ||= capture_diff
     end
 
     ##
@@ -36,11 +37,18 @@ module CleoQualityReview
 
     attr_reader :command_runner, :target_files, :base_ref, :strict_base
 
-    def tracked_changes_diff
-      command = ["git", "diff", diff_base]
-      command.concat(["--", *target_files]) unless target_files.empty?
+    # When there are no target files there is nothing to review, so the diff is
+    # empty. We must not fall back to an unscoped +git diff+, which would capture
+    # the entire working tree (including untracked files such as installed gems
+    # under vendor/bundle) and overflow the LLM request.
+    def capture_diff
+      return "" if target_files.empty?
 
-      command_runner.run(*command).stdout
+      [tracked_changes_diff, untracked_changes_diff].reject(&:empty?).join("\n")
+    end
+
+    def tracked_changes_diff
+      command_runner.run("git", "diff", diff_base, "--", *target_files).stdout
     end
 
     def untracked_changes_diff
@@ -50,13 +58,8 @@ module CleoQualityReview
     end
 
     def untracked_target_files
-      command = ["git", "ls-files", "--others", "--exclude-standard"]
-      empty_targets = target_files.empty?
-      command.concat(["--", *target_files]) unless empty_targets
-
-      command_runner.run(*command).stdout.lines.map(&:strip).select do |path|
-        empty_targets || target_files.include?(path)
-      end
+      command_runner.run("git", "ls-files", "--others", "--exclude-standard", "--", *target_files)
+        .stdout.lines.map(&:strip).select { |path| target_files.include?(path) }
     end
 
     def diff_base

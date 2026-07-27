@@ -39,6 +39,14 @@ module CleoQualityReview
     keyword_init: true,
   ) do
     ##
+    # Whether the run has any files to review. Runs with no target files
+    # (e.g. a branch that only changes non-Ruby files) have nothing to analyse.
+    # @return [Boolean]
+    def reviewable?
+      !Array(target_files).empty?
+    end
+
+    ##
     # Convert the run to a hash representation
     # @return [Hash{Symbol => Object}]
     def to_h
