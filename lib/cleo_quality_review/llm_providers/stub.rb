@@ -54,21 +54,25 @@ module CleoQualityReview
       ##
       # Stub LLM client, mirrors OpenAi::Client interface.
       class Client
-        attr_reader :received_prompts
+        attr_reader :received_prompts, :received_instructions
 
         ##
         # @param [Config] config stub configuration
         def initialize(config:)
           @config = config
           @received_prompts = []
+          @received_instructions = []
         end
 
         ##
         # Generate a review by returning the configured response.
-        # @param [String] prompt the prompt sent
+        # @param [String] prompt the format-specific prompt sent as input
+        # @param [String, nil] instructions shared configuration prompt applied
+        #   to every run
         # @return [String] the configured response
-        def generate_review(prompt)
+        def generate_review(prompt, instructions: nil)
           received_prompts << prompt
+          received_instructions << instructions
           response = config.response
 
           case response

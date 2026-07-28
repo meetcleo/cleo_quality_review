@@ -11,6 +11,10 @@ module CleoQualityReview
   # Formats quality review results using an LLM with format-specific prompts
   class Formatter
     ##
+    # Format name of the shared configuration prompt applied to every run
+    CONFIGURATION_FORMAT = "configuration"
+
+    ##
     # @param [Run] run the quality review run to format
     # @param [CommandRunner] command_runner for executing shell commands
     # @param [LlmConfig] llm_config LLM provider configuration
@@ -30,7 +34,7 @@ module CleoQualityReview
     def format
       return "" unless run.reviewable?
 
-      llm_client.generate_review(prompt)
+      llm_client.generate_review(prompt, instructions: configuration_prompt)
     end
 
     private
@@ -45,6 +49,13 @@ module CleoQualityReview
         prompt: PromptLoader.load(format: run.format),
         artifacts: artifacts,
       ).build
+    end
+
+    ##
+    # Shared review rules applied to every run regardless of output format.
+    # @return [String]
+    def configuration_prompt
+      PromptLoader.load(format: CONFIGURATION_FORMAT)
     end
 
     ##

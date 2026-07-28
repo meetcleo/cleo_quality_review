@@ -89,11 +89,13 @@ module CleoQualityReview
 
         ##
         # Generate a review using the OpenAI Responses API.
-        # @param [String] prompt the prompt to send
+        # @param [String] prompt the format-specific prompt to send as input
+        # @param [String, nil] instructions shared configuration prompt sent as
+        #   the system-level instructions applied to every run
         # @return [String] generated review text
         # @raise [ApiError] if the API request fails
-        def generate_review(prompt)
-          response = execute_request(prompt)
+        def generate_review(prompt, instructions: nil)
+          response = execute_request(request_body(prompt, instructions))
           parse_response(response)
         end
 
@@ -101,9 +103,9 @@ module CleoQualityReview
 
         attr_reader :config, :http_transport
 
-        def execute_request(prompt)
+        def execute_request(body)
           timeout_seconds = config.timeout_seconds
-          http_transport.post_json(build_request(prompt, timeout_seconds))
+          http_transport.post_json(build_request(body, timeout_seconds))
         rescue Net::OpenTimeout, Net::ReadTimeout, Net::WriteTimeout => e
           raise ApiError, timeout_error_message(timeout_seconds, e)
         end
@@ -116,13 +118,19 @@ module CleoQualityReview
           raise ApiError, "OpenAI Responses API returned invalid JSON: #{e.message}"
         end
 
-        def build_request(prompt, timeout_seconds)
+        def build_request(body, timeout_seconds)
           HttpRequest.new(
             uri: RESPONSES_API_URL,
             headers: headers,
-            body: { model: config.model, input: prompt },
+            body: body,
             timeout_seconds: timeout_seconds,
           )
+        end
+
+        def request_body(prompt, instructions)
+          body = { model: config.model, input: prompt }
+          body[:instructions] = instructions unless instructions.to_s.strip.empty?
+          body
         end
 
         def timeout_error_message(timeout_seconds, error)

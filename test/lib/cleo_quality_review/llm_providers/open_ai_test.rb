@@ -28,6 +28,33 @@ module CleoQualityReview
           assert_responses_api_request(transport.received_request)
         end
 
+        def test_includes_configuration_instructions_in_request_body
+          transport = FakeTransport.new(response: HttpResponse.new(status_code: 200, body: JSON.generate("output_text" => "analysis")))
+          client = Client.new(
+            config: FakeConfig.new(api_key: "secret", model: "gpt-5.5", timeout_seconds: 180),
+            http_transport: transport,
+          )
+
+          client.generate_review("prompt", instructions: "shared rules")
+
+          assert_equal(
+            { model: "gpt-5.5", input: "prompt", instructions: "shared rules" },
+            transport.received_request.body,
+          )
+        end
+
+        def test_omits_instructions_when_not_provided
+          transport = FakeTransport.new(response: HttpResponse.new(status_code: 200, body: JSON.generate("output_text" => "analysis")))
+          client = Client.new(
+            config: FakeConfig.new(api_key: "secret", model: "gpt-5.5", timeout_seconds: 180),
+            http_transport: transport,
+          )
+
+          client.generate_review("prompt")
+
+          refute_includes transport.received_request.body.keys, :instructions
+        end
+
         def test_http_transport_configures_net_http_timeouts
           http_start = HttpStartRecorder.new
           response = post_json_with_stubbed_start(http_start)

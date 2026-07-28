@@ -33,6 +33,19 @@ module CleoQualityReview
       end
     end
 
+    def test_generate_review_forwards_instructions_to_provider
+      in_tmpdir do
+        config = LlmConfig.new(env: { "CLEO_QUALITY_REVIEW_OPEN_AI_KEY" => "test-key" })
+        client = LlmClient.new(config: config)
+        stubbed_provider_client = StubProviderClient.new("test review")
+        client.define_singleton_method(:provider_client) { stubbed_provider_client }
+
+        client.generate_review("test prompt", instructions: "shared configuration")
+
+        assert_equal "shared configuration", stubbed_provider_client.received_instructions
+      end
+    end
+
     def test_does_not_log_when_log_disabled
       in_tmpdir do
         config = LlmConfig.new(env: { "CLEO_QUALITY_REVIEW_OPEN_AI_KEY" => "test-key" })
@@ -64,11 +77,14 @@ module CleoQualityReview
   end
 
   class StubProviderClient
+    attr_reader :received_instructions
+
     def initialize(response)
       @response = response
     end
 
-    def generate_review(_prompt)
+    def generate_review(_prompt, instructions: nil)
+      @received_instructions = instructions
       @response
     end
   end
@@ -78,7 +94,7 @@ module CleoQualityReview
       @error = error
     end
 
-    def generate_review(_prompt)
+    def generate_review(_prompt, instructions: nil)
       raise @error
     end
   end

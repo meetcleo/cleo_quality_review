@@ -49,6 +49,15 @@ module CleoQualityReview
           assert_equal ["first prompt", "second prompt"], client.received_prompts
         end
 
+        def test_client_records_received_instructions
+          Config.reset!
+          client = stub_client
+
+          client.generate_review("prompt", instructions: "shared configuration")
+
+          assert_equal ["shared configuration"], client.received_instructions
+        end
+
         def test_stub_config_is_always_configured
           config = Config.new(env: {})
 

@@ -110,14 +110,16 @@ Checks run in parallel, one worker per CPU core by default. Override with `--job
 
 ## Prompts
 
-Prompts are format-specific:
+Every run combines two prompts: a shared `configuration` prompt and a format-specific prompt.
+
+`configuration` defines the standard review rules that apply to every run regardless of output format: the inputs, tool thresholds, prioritisation, and noise-reduction rules. The format-specific prompts define only the output shape:
 
 - `human`
 - `agent`
 - `github`
 - `pr_review`
 
-Local overrides are loaded first from `.cleo_quality_review/prompts/<format>.md`, then `.cleo_quality_review/<format>.md`. For backwards compatibility, `human` also supports `.cleo_quality_review/prompt.md`. If no local prompt exists, the gem uses `vendor/cleo_quality_review/prompts/<format>.md`.
+Local overrides are loaded first from `.cleo_quality_review/prompts/<format>.md`, then `.cleo_quality_review/<format>.md`. For backwards compatibility, `human` also supports `.cleo_quality_review/prompt.md`. If no local prompt exists, the gem uses `vendor/cleo_quality_review/prompts/<format>.md`. The `configuration` prompt follows the same lookup, so it can be overridden per repository.
 
 ## File Configuration
 
@@ -218,6 +220,6 @@ flowchart LR
     classDef neutral fill:#DAF0E5,stroke:#46635E,stroke-width:2px,color:#1D3733,rx:10,ry:10
 ```
 
-All formats build a prompt from the run data and artifacts, then send it through the configured LLM provider. The selected format determines which prompt is loaded and therefore the output shape. The `publish-pr-review` subcommand uses `GitHubReviewPublisher` to post rendered reviews directly to GitHub pull requests.
+All formats build a prompt from the run data and artifacts, then send it through the configured LLM provider. The selected format determines which format prompt is loaded and therefore the output shape. The shared `configuration` prompt is sent alongside it as the request instructions, so the standard review rules apply on every run. The `publish-pr-review` subcommand uses `GitHubReviewPublisher` to post rendered reviews directly to GitHub pull requests.
 
 On a pull request, `Runner` uses `IncrementalBaseResolver` to scope the diff to changes made since the last review. Both it and `GitHubReviewPublisher` talk to the GitHub API through the shared `GitHubClient`.

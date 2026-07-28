@@ -19,10 +19,12 @@ module CleoQualityReview
 
     ##
     # Generate a review from the given prompt
-    # @param [String] prompt
+    # @param [String] prompt the format-specific prompt sent as input
+    # @param [String, nil] instructions shared configuration prompt applied to
+    #   every run
     # @return [String] the generated review
-    def generate_review(prompt)
-      generate_with_logging(prompt)
+    def generate_review(prompt, instructions: nil)
+      generate_with_logging(prompt, instructions)
     rescue StandardError => e
       log_error(prompt, e)
       raise
@@ -32,8 +34,10 @@ module CleoQualityReview
 
     attr_reader :config, :logger
 
-    def generate_with_logging(prompt)
-      provider_client.generate_review(prompt).tap { |response| log_success(prompt, response) }
+    def generate_with_logging(prompt, instructions)
+      provider_client.generate_review(prompt, instructions: instructions).tap do |response|
+        log_success(prompt, response)
+      end
     end
 
     def log_success(prompt, response)

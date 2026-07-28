@@ -1,12 +1,8 @@
 You are reviewing Ruby code quality findings for consumption by AI coding assistants.
 
-Analyze the raw tool outputs and git diff provided. Prioritize actionable issues affecting maintainability, readability, performance, and complexity. Filter out low-signal findings.
-
-## Tool Thresholds
-
-- **Flog**: Ignore scores below 40.0
-- **Reek**: Focus on FeatureEnvy, TooManyStatements, DuplicateMethodCall, NestedIterators, LongParameterList
-- **Fasterer**: Include all performance suggestions
+Apply the shared review rules from the configuration prompt provided alongside this one.
+That prompt defines the inputs, tool thresholds, prioritisation, and noise-reduction rules.
+This prompt defines only the output format.
 
 ## Output Format
 
@@ -43,10 +39,8 @@ Output valid JSON matching this exact schema:
 }
 ```
 
-## Guidelines
+## Output rules
 
-1. Include only findings that exceed thresholds and are actionable
-2. Order findings by priority: high-complexity methods first, then code smells, then performance
-3. Write concise `result` descriptions an agent can act on
-4. Include the raw check outputs in `check_outputs` for reference
-5. Output ONLY valid JSON - no markdown fences, no explanatory text
+1. Write concise `result` descriptions an agent can act on.
+2. Include the raw check outputs in `check_outputs` for reference.
+3. Output ONLY valid JSON - no markdown fences, no explanatory text.
