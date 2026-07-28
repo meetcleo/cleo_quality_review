@@ -7,9 +7,10 @@ require "cleo_quality_review/run"
 
 module CleoQualityReview
   class FormatterTest < Minitest::Test
-    FakeLlmClient = Struct.new(:received_prompt, keyword_init: true) do
-      def generate_review(prompt)
+    FakeLlmClient = Struct.new(:received_prompt, :received_instructions, keyword_init: true) do
+      def generate_review(prompt, instructions: nil)
         self.received_prompt = prompt
+        self.received_instructions = instructions
         "review output"
       end
     end
@@ -26,6 +27,20 @@ module CleoQualityReview
 
         assert_equal "review output", output
         assert_includes llm_client.received_prompt, "Raw reek output"
+      end
+    end
+
+    def test_format_passes_configuration_prompt_as_instructions
+      in_tmpdir do
+        FileUtils.mkdir_p("tmp/quality_checks/123/reek")
+        File.write("tmp/quality_checks/123/changes.diff", "diff content")
+        File.write("tmp/quality_checks/123/reek/raw_output.json", "[]")
+        llm_client = FakeLlmClient.new
+        run = Run.new(timestamp: 123, format: "human", target_files: ["app/example.rb"], checks: ["reek"])
+
+        Formatter.new(run: run, command_runner: nil, llm_client: llm_client).format
+
+        assert_includes llm_client.received_instructions, "standard rules that apply to every review"
       end
     end
 
