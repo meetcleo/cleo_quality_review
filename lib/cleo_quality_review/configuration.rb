@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
+require "etc"
 require "set"
 require "yaml"
 
 module CleoQualityReview
   ##
-  # Configuration for file include/exclude patterns
+  # Configuration for file include/exclude patterns and runtime defaults
   class Configuration
     DEFAULT_CONFIG_PATH = File.expand_path("../../config/default.yml", __dir__)
     LOCAL_CONFIG_PATH = ".cleo_quality_review.yaml"
@@ -22,6 +23,36 @@ module CleoQualityReview
     # @return [Configuration]
     def self.load(root: Dir.pwd)
       Loader.new(root: root).load
+    end
+
+    ##
+    # Resolve the configured worker count for concurrent checks.
+    # @return [Integer] resolved worker count (at least 1)
+    def self.max_concurrency
+      max_concurrency_limit(env_max_concurrency || default_max_concurrency)
+    end
+
+    ##
+    # Clamp a worker count to a usable lower bound.
+    # @param [Integer] value worker count to clamp
+    # @return [Integer] clamped worker count
+    def self.max_concurrency_limit(value)
+      [value.to_i, 1].max
+    end
+
+    ##
+    # Read the max worker count from the environment, if configured.
+    # @return [Integer, nil] the configured count, or nil when unset/blank
+    # @raise [ArgumentError] if the environment value is not an integer
+    def self.env_max_concurrency
+      value = ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"]
+      value && !value.strip.empty? ? Integer(value) : nil
+    end
+
+    ##
+    # @return [Integer] host processor count used as the default worker cap
+    def self.default_max_concurrency
+      Etc.nprocessors
     end
 
     ##

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../../test_helper"
+require "etc"
 require "cleo_quality_review/configuration"
 
 module CleoQualityReview
@@ -114,6 +115,50 @@ module CleoQualityReview
 
         assert_includes error.message, "Config file not found"
       end
+    end
+
+    def test_max_concurrency_uses_env_var_when_set
+      original = ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"]
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = "7"
+
+      assert_equal 7, Configuration.max_concurrency
+    ensure
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = original
+    end
+
+    def test_max_concurrency_ignores_blank_env_var
+      original = ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"]
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = "   "
+
+      assert_equal Etc.nprocessors, Configuration.max_concurrency
+    ensure
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = original
+    end
+
+    def test_max_concurrency_falls_back_to_processor_count
+      original = ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"]
+      ENV.delete("CLEO_QUALITY_REVIEW_MAX_CONCURRENCY")
+
+      assert_equal Etc.nprocessors, Configuration.max_concurrency
+    ensure
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = original
+    end
+
+    def test_max_concurrency_fails_for_non_integer_env_var
+      original = ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"]
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = "many"
+
+      assert_raises(ArgumentError) { Configuration.max_concurrency }
+    ensure
+      ENV["CLEO_QUALITY_REVIEW_MAX_CONCURRENCY"] = original
+    end
+
+    def test_max_concurrency_limit_clamps_zero_to_one
+      assert_equal 1, Configuration.max_concurrency_limit(0)
+    end
+
+    def test_max_concurrency_limit_clamps_negative_to_one
+      assert_equal 1, Configuration.max_concurrency_limit(-4)
     end
   end
 end

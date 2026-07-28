@@ -98,6 +98,8 @@ Set `CLEO_QUALITY_REVIEW_INCREMENTAL=0` (or `false`, `no`, `off`) to disable inc
 
 The gem embeds Ruby check adapters for Reek, Flog, and Fasterer. Each run writes raw tool artifacts to `tmp/quality_checks/<review_id>/<tool_type>/<check>/raw_output.*` and also normalizes findings for machine-readable output.
 
+Checks run in parallel, one worker per CPU core by default. Override with `--jobs N` (`-j`) or `CLEO_QUALITY_REVIEW_MAX_CONCURRENCY`.
+
 `agent` output uses the agent prompt to condense run metadata, the git diff, raw tool outputs, and normalized findings into JSON for coding agents.
 
 `github` output uses the GitHub prompt to condense the full report into GitHub workflow annotations for the most relevant findings.
