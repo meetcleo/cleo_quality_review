@@ -13,8 +13,21 @@ The diff is provided so you can map tool findings to the lines that changed.
 ## Tool thresholds and severity
 
 - **Flog**: Ignore scores below 40.0. Treat high-complexity methods as the most important findings because they are the most expensive to maintain.
-- **Reek**: Prefer actionable smells such as FeatureEnvy, TooManyStatements, DuplicateMethodCall, NestedIterators, and LongParameterList.
+- **Reek**: Prefer actionable smells such as FeatureEnvy, DuplicateMethodCall, NestedIterators, and LongParameterList.
 - **Fasterer**: Low severity. Include a performance suggestion only when it clearly applies to code changed by this review and the fix is straightforward.
+
+## Rule-specific guidance
+
+These notes refine how individual rules should be treated.
+Where a note here conflicts with the general guidance above, the note takes precedence for that rule.
+
+### Reek: TooManyStatements
+
+- Exclude this smell entirely for test files.
+  Treat any file under `test/` or `spec/`, or whose name ends in `_test.rb` or `_spec.rb`, as a test file.
+  Tests are expected to be self-contained and are intentionally verbose, so a long test method is not a defect worth reporting.
+- In application code, deprioritise this smell.
+  Only surface it when the method is a particularly egregious example, such as a long method that clearly juggles several unrelated responsibilities, and omit it otherwise.
 
 ## Prioritisation
 
