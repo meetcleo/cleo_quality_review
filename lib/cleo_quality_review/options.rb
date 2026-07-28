@@ -11,14 +11,6 @@ module CleoQualityReview
     FORMATS = %w[human agent github pr_review].freeze
     DEFAULT_FORMAT = "human"
     DEFAULT_CHECKS = ["all"].freeze
-    OPTION_REGISTRATIONS = [
-      :register_format_option,
-      :register_check_options,
-      :register_target_options,
-      :register_output_options,
-      :register_jobs_option,
-      :register_help_option,
-    ].freeze
 
     ##
     # Value object containing parsed command-line options
@@ -108,11 +100,16 @@ module CleoQualityReview
       OptionParser.new do |opts|
         opts.banner = "Usage: check_quality [options] [files...]"
         register_options(opts)
+        register_help_option(opts)
       end
     end
 
     def register_options(opts)
-      OPTION_REGISTRATIONS.each { |registration| send(registration, opts) }
+      register_format_option(opts)
+      register_check_options(opts)
+      register_target_options(opts)
+      register_output_options(opts)
+      register_jobs_option(opts)
     end
 
     def register_jobs_option(opts)
