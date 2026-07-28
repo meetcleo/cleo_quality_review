@@ -17,9 +17,13 @@ module CleoQualityReview
   # workers make real progress.
   class ConcurrentExecutor
     ##
-    # @param [Integer, nil] max_workers explicit worker cap, or nil to auto-size to cores
-    def initialize(max_workers: Configuration.max_concurrency)
-      @max_workers = Configuration.max_concurrency_limit(max_workers)
+    # @param [Integer, nil] max_workers explicit worker cap, or nil to use configuration
+    def initialize(max_workers: nil)
+      @max_workers = if max_workers
+                       Configuration.max_concurrency_limit(max_workers)
+                     else
+                       Configuration.max_concurrency
+                     end
     end
 
     ##
@@ -108,9 +112,13 @@ module CleoQualityReview
     # @return [void]
     def drain(queue)
       loop do
-        yield(queue.pop(true))
-      rescue ThreadError
-        break
+        work = begin
+          queue.pop(true)
+        rescue ThreadError
+          break
+        end
+
+        yield(work)
       end
     end
   end

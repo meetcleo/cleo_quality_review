@@ -112,5 +112,17 @@ module CleoQualityReview
 
       assert_includes error.message, "boom"
     end
+
+    def test_propagates_thread_error_from_work_item
+      error = assert_raises(ThreadError) do
+        ConcurrentExecutor.new(max_workers: 2).map([1, 2]) do |n|
+          raise ThreadError, "thread failed" if n == 2
+
+          n
+        end
+      end
+
+      assert_includes error.message, "thread failed"
+    end
   end
 end
