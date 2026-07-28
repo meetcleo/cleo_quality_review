@@ -10,11 +10,28 @@ The combined tool output is noisy.
 Your job is to decide what genuinely matters and to discard the rest.
 The diff is provided so you can map tool findings to the lines that changed.
 
+## Excluded files
+
+Do not review test files: ignore every tool finding that points to one, and never post a comment on a test file.
+Test files are those inside a `test/` or `spec/` directory, for example `test/models/user_test.rb`.
+A file that merely has `test` in its name but lives in application code, such as an A/B-test model under `app/`, is not a test file.
+Tests in this codebase are intentionally verbose and self-contained, so the smells these tools report on them are expected rather than defects.
+
 ## Tool thresholds and severity
 
 - **Flog**: Ignore scores below 40.0. Treat high-complexity methods as the most important findings because they are the most expensive to maintain.
-- **Reek**: Prefer actionable smells such as FeatureEnvy, TooManyStatements, DuplicateMethodCall, NestedIterators, and LongParameterList.
+- **Reek**: Prefer actionable smells such as FeatureEnvy, DuplicateMethodCall, NestedIterators, and LongParameterList.
 - **Fasterer**: Low severity. Include a performance suggestion only when it clearly applies to code changed by this review and the fix is straightforward.
+
+## Rule-specific guidance
+
+These notes refine how individual rules should be treated.
+Where a note here conflicts with the general guidance above, the note takes precedence for that rule.
+
+### Reek: TooManyStatements
+
+- Deprioritise this smell in application code.
+  Only surface it when the method is a particularly egregious example, such as a long method that clearly juggles several unrelated responsibilities, and omit it otherwise.
 
 ## Prioritisation
 
