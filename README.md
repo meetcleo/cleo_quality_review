@@ -110,14 +110,16 @@ Checks run in parallel, one worker per CPU core by default. Override with `--job
 
 ## Prompts
 
-Prompts are format-specific:
+Every run combines two prompts: a shared `configuration` prompt and a format-specific prompt.
+
+`configuration` defines the standard review rules that apply to every run regardless of output format: the inputs, tool thresholds, prioritisation, and noise-reduction rules. The format-specific prompts define only the output shape:
 
 - `human`
 - `agent`
 - `github`
 - `pr_review`
 
-Local overrides are loaded first from `.cleo_quality_review/prompts/<format>.md`, then `.cleo_quality_review/<format>.md`. For backwards compatibility, `human` also supports `.cleo_quality_review/prompt.md`. If no local prompt exists, the gem uses `vendor/cleo_quality_review/prompts/<format>.md`.
+Local overrides are loaded first from `.cleo_quality_review/prompts/<format>.md`, then `.cleo_quality_review/<format>.md`. For backwards compatibility, `human` also supports `.cleo_quality_review/prompt.md`. If no local prompt exists, the gem uses `vendor/cleo_quality_review/prompts/<format>.md`. The `configuration` prompt follows the same lookup, so it can be overridden per repository.
 
 ## File Configuration
 
