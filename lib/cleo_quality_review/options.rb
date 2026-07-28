@@ -104,12 +104,16 @@ module CleoQualityReview
     end
 
     def register_options(opts)
+      register_runtime_options(opts)
+      register_help_option(opts)
+    end
+
+    def register_runtime_options(opts)
       register_format_option(opts)
       register_check_options(opts)
       register_target_options(opts)
       register_output_options(opts)
       register_jobs_option(opts)
-      register_help_option(opts)
     end
 
     def register_jobs_option(opts)

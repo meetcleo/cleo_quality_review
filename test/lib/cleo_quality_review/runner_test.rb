@@ -11,6 +11,14 @@ module CleoQualityReview
   class RunnerTest < Minitest::Test
     FakeClock = Struct.new(:now, keyword_init: true)
 
+    GIT_RESPONSES = {
+      ["git", "merge-base", "origin/main", "HEAD"] => "base-sha\n",
+      ["git", "diff", "--name-only", "--diff-filter=ACMRT", "base-sha"] => "app/example.rb\n",
+      ["git", "ls-files", "--others", "--exclude-standard"] => "",
+      ["git", "diff", "base-sha", "--", "app/example.rb"] => "diff --git a/app/example.rb b/app/example.rb\n",
+      ["git", "ls-files", "--others", "--exclude-standard", "--", "app/example.rb"] => "",
+    }.freeze
+
     FakeBaseResolver = Struct.new(:sha, keyword_init: true) do
       def resolve(head: "HEAD")
         sha
@@ -18,42 +26,18 @@ module CleoQualityReview
     end
 
     FakeCommandRunner = Struct.new(:calls, keyword_init: true) do
-      def run(*command, env: {})
+      def run(*command, **_kwargs)
         calls << command
-        case command
-        when ["git", "merge-base", "origin/main", "HEAD"]
-          CleoQualityReview::CommandResult.new(stdout: "base-sha\n", stderr: "", status: CleoQualityReviewTestHelpers::Status.new(true))
-        when ["git", "diff", "--name-only", "--diff-filter=ACMRT", "base-sha"]
-          CleoQualityReview::CommandResult.new(stdout: "app/example.rb\n", stderr: "", status: CleoQualityReviewTestHelpers::Status.new(true))
-        when ["git", "ls-files", "--others", "--exclude-standard"]
-          CleoQualityReview::CommandResult.new(stdout: "", stderr: "", status: CleoQualityReviewTestHelpers::Status.new(true))
-        when ["git", "diff", "base-sha", "--", "app/example.rb"]
-          CleoQualityReview::CommandResult.new(stdout: "diff --git a/app/example.rb b/app/example.rb\n", stderr: "", status: CleoQualityReviewTestHelpers::Status.new(true))
-        when ["git", "ls-files", "--others", "--exclude-standard", "--", "app/example.rb"]
-          CleoQualityReview::CommandResult.new(stdout: "", stderr: "", status: CleoQualityReviewTestHelpers::Status.new(true))
-        else
-          CleoQualityReview::CommandResult.new(stdout: "", stderr: "", status: CleoQualityReviewTestHelpers::Status.new(true))
-        end
+        CleoQualityReview::CommandResult.new(stdout: GIT_RESPONSES.fetch(command, ""), stderr: "", status: CleoQualityReviewTestHelpers::Status.new(true))
       end
     end
 
     # Records calls under a mutex so it is safe to share across the threads
     # spawned when several checks run in parallel.
     ConcurrentFakeCommandRunner = Struct.new(:calls, :lock, keyword_init: true) do
-      def run(*command, env: {})
+      def run(*command, **_kwargs)
         lock.synchronize { calls << command }
-        CleoQualityReview::CommandResult.new(stdout: response_for(command), stderr: "", status: CleoQualityReviewTestHelpers::Status.new(true))
-      end
-
-      private
-
-      def response_for(command)
-        case command
-        when ["git", "merge-base", "origin/main", "HEAD"] then "base-sha\n"
-        when ["git", "diff", "--name-only", "--diff-filter=ACMRT", "base-sha"] then "app/example.rb\n"
-        when ["git", "diff", "base-sha", "--", "app/example.rb"] then "diff --git a/app/example.rb b/app/example.rb\n"
-        else ""
-        end
+        CleoQualityReview::CommandResult.new(stdout: GIT_RESPONSES.fetch(command, ""), stderr: "", status: CleoQualityReviewTestHelpers::Status.new(true))
       end
     end
 

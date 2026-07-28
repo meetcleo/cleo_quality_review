@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "digest"
+require "forwardable"
 require "json"
 
 require_relative "changes_diff"
@@ -16,6 +17,8 @@ module CleoQualityReview
   ##
   # Orchestrates a complete quality review run
   class Runner
+    extend Forwardable
+
     ##
     # Grouped values resolved at the start of an analysis run
     AnalysisContext = Struct.new(:timestamp, :base_ref, :target, :changes, :review_id, :check_classes, keyword_init: true) do
@@ -34,20 +37,27 @@ module CleoQualityReview
     end
 
     ##
+    # Runtime collaborators for a quality review run
+    Dependencies = Struct.new(:command_runner, :clock, :check_registry, :base_resolver, :executor, keyword_init: true) do
+      def self.for(options, overrides)
+        new(
+          **{
+            command_runner: CommandRunner.new,
+            clock: Time,
+            check_registry: Checks,
+            base_resolver: nil,
+            executor: ConcurrentExecutor.new(max_workers: options.jobs),
+          }.merge(overrides),
+        )
+      end
+    end
+
+    ##
     # @param [Options::ParseResult] options parsed command-line options
-    # @param [CommandRunner] command_runner for executing shell commands
-    # @param [#now] clock time source for timestamps
-    # @param [CheckRegistry] check_registry registry for resolving check names
-    # @param [#resolve, nil] base_resolver resolves an incremental base commit, or nil for the full diff
-    # @param [ConcurrentExecutor] executor runs checks across a bounded thread pool
-    def initialize(options:, command_runner: CommandRunner.new, clock: Time, check_registry: Checks, base_resolver: nil,
-                   executor: ConcurrentExecutor.new(max_workers: options.jobs))
+    # @param [Hash] dependencies optional runtime collaborators for tests or alternate runners
+    def initialize(options:, **dependencies)
       @options = options
-      @command_runner = command_runner
-      @clock = clock
-      @check_registry = check_registry
-      @base_resolver = base_resolver
-      @executor = executor
+      @dependencies = Dependencies.for(options, dependencies)
     end
 
     ##
@@ -63,7 +73,9 @@ module CleoQualityReview
 
     private
 
-    attr_reader :options, :command_runner, :clock, :check_registry, :base_resolver, :executor
+    attr_reader :options, :dependencies
+    def_delegators :dependencies, :command_runner, :clock, :check_registry, :base_resolver, :executor
+    private :command_runner, :clock, :check_registry, :base_resolver, :executor
 
     def epoch_milliseconds
       (clock.now.to_r * 1_000).to_i
