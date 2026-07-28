@@ -90,7 +90,7 @@ module CleoQualityReview
       assert_equal [10, 20, 30], results
     end
 
-    def test_caps_concurrency_at_max_workers
+    def test_limits_concurrent_items_to_max_workers
       surplus_started = Gate.for(ConcurrentExecutor.new(max_workers: 2), [1, 2, 3, 4]).surplus_started_after(2) { |item| item }
 
       assert_equal 0, surplus_started, "no more than max_workers items should run at once"
