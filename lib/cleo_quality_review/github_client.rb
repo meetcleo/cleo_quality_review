@@ -4,6 +4,8 @@ require "json"
 require "net/http"
 require "uri"
 
+require_relative "llm_errors"
+
 module CleoQualityReview
   ##
   # Thin authenticated HTTP client for the GitHub REST API
@@ -12,7 +14,7 @@ module CleoQualityReview
     DEFAULT_API_URL = "https://api.github.com"
 
     ##
-    # Wrapped HTTP response
+    # Wrapped GitHub REST API response
     #
     # @!attribute [r] status_code
     #   @return [Integer] HTTP status code
@@ -23,6 +25,21 @@ module CleoQualityReview
       # @return [Boolean] whether the response status is in the 2xx range
       def success?
         (200..299).cover?(status_code.to_i)
+      end
+
+      ##
+      # @param [String] action description of the request that produced this response
+      # @raise [Error] unless the response succeeded
+      # @return [void]
+      def assert_success!(action)
+        raise Error, "#{action} failed with status #{status_code}: #{body}" unless success?
+      end
+
+      ##
+      # @return [Array] the body parsed as JSON, or an empty array when it isn't a JSON array
+      def parsed_array
+        parsed = JSON.parse(body)
+        parsed.is_a?(Array) ? parsed : []
       end
     end
 
