@@ -8,15 +8,15 @@ require "cleo_quality_review/incremental_base_resolver"
 
 module CleoQualityReview
   class IncrementalBaseResolverTest < Minitest::Test
-    FakeReviewsClient = Struct.new(:reviews_json, :status_code, :requested_paths, keyword_init: true) do
+    FakeCommentsClient = Struct.new(:comments_json, :status_code, :requested_paths, keyword_init: true) do
       def get(path)
         requested_paths << path
-        GitHubClient::Response.new(status_code: status_code || 200, body: reviews_json || "[]")
+        GitHubClient::Response.new(status_code: status_code || 200, body: comments_json || "[]")
       end
     end
 
     # Returns a distinct body per page number parsed from the request path.
-    PaginatedReviewsClient = Struct.new(:pages, :requested_paths, keyword_init: true) do
+    PaginatedCommentsClient = Struct.new(:pages, :requested_paths, keyword_init: true) do
       def get(path)
         requested_paths << path
         page = path[/[?&]page=(\d+)/, 1].to_i
@@ -42,7 +42,7 @@ module CleoQualityReview
       in_tmpdir do |dir|
         resolver = build_resolver(
           env: { "GITHUB_EVENT_PATH" => write_event(dir, { "push" => {} }), "GITHUB_TOKEN" => "t", "GITHUB_REPOSITORY" => "owner/repo" },
-          client: FakeReviewsClient.new(requested_paths: []),
+          client: FakeCommentsClient.new(requested_paths: []),
         )
 
         assert_nil resolver.resolve
@@ -53,7 +53,7 @@ module CleoQualityReview
       in_tmpdir do |dir|
         resolver = build_resolver(
           env: { "GITHUB_EVENT_PATH" => write_event(dir, pull_request_event), "GITHUB_REPOSITORY" => "owner/repo" },
-          client: FakeReviewsClient.new(requested_paths: []),
+          client: FakeCommentsClient.new(requested_paths: []),
         )
 
         assert_nil resolver.resolve
@@ -64,20 +64,20 @@ module CleoQualityReview
       in_tmpdir do |dir|
         resolver = build_resolver(
           env: base_env(dir).merge("CLEO_QUALITY_REVIEW_INCREMENTAL" => "0"),
-          client: FakeReviewsClient.new(reviews_json: reviews_json, requested_paths: []),
-          git: FakeGit.new(ancestors: %w[sha2], calls: []),
+          client: FakeCommentsClient.new(comments_json: sticky_comment_json("sha1"), requested_paths: []),
+          git: FakeGit.new(ancestors: %w[sha1], calls: []),
         )
 
         assert_nil resolver.resolve
       end
     end
 
-    def test_returns_nil_when_no_cleo_quality_review_exists
+    def test_returns_nil_when_no_sticky_comment_exists
       in_tmpdir do |dir|
-        only_other_reviews = JSON.generate([{ "body" => "LGTM", "commit_id" => "human-sha" }])
+        only_other_comments = JSON.generate([{ "body" => "LGTM", "user" => { "type" => "User" } }])
         resolver = build_resolver(
           env: base_env(dir),
-          client: FakeReviewsClient.new(reviews_json: only_other_reviews, requested_paths: []),
+          client: FakeCommentsClient.new(comments_json: only_other_comments, requested_paths: []),
           git: FakeGit.new(ancestors: %w[human-sha], calls: []),
         )
 
@@ -85,23 +85,11 @@ module CleoQualityReview
       end
     end
 
-    def test_returns_the_newest_reviewed_commit_that_is_an_ancestor
+    def test_returns_the_reviewed_commit_when_it_is_an_ancestor
       in_tmpdir do |dir|
         resolver = build_resolver(
           env: base_env(dir),
-          client: FakeReviewsClient.new(reviews_json: reviews_json, requested_paths: []),
-          git: FakeGit.new(ancestors: %w[sha1 sha2], calls: []),
-        )
-
-        assert_equal "sha2", resolver.resolve
-      end
-    end
-
-    def test_skips_a_rewritten_newer_commit_and_falls_back_to_the_older_ancestor
-      in_tmpdir do |dir|
-        resolver = build_resolver(
-          env: base_env(dir),
-          client: FakeReviewsClient.new(reviews_json: reviews_json, requested_paths: []),
+          client: FakeCommentsClient.new(comments_json: sticky_comment_json("sha1"), requested_paths: []),
           git: FakeGit.new(ancestors: %w[sha1], calls: []),
         )
 
@@ -109,11 +97,11 @@ module CleoQualityReview
       end
     end
 
-    def test_returns_nil_when_no_reviewed_commit_survives_in_history
+    def test_returns_nil_when_the_reviewed_commit_is_not_an_ancestor
       in_tmpdir do |dir|
         resolver = build_resolver(
           env: base_env(dir),
-          client: FakeReviewsClient.new(reviews_json: reviews_json, requested_paths: []),
+          client: FakeCommentsClient.new(comments_json: sticky_comment_json("rewritten-sha"), requested_paths: []),
           git: FakeGit.new(ancestors: [], calls: []),
         )
 
@@ -121,12 +109,12 @@ module CleoQualityReview
       end
     end
 
-    def test_ignores_reviews_without_a_commit_id
+    def test_ignores_a_comment_whose_marker_has_no_extractable_commit
       in_tmpdir do |dir|
-        commitless = JSON.generate([{ "body" => "<!-- cleo-quality-review:x -->", "user" => { "type" => "Bot" }, "commit_id" => nil, "submitted_at" => "2026-07-01T09:00:00Z" }])
+        malformed = JSON.generate([{ "body" => "<!-- cleo-quality-review: -->", "user" => { "type" => "Bot" } }])
         resolver = build_resolver(
           env: base_env(dir),
-          client: FakeReviewsClient.new(reviews_json: commitless, requested_paths: []),
+          client: FakeCommentsClient.new(comments_json: malformed, requested_paths: []),
           git: FakeGit.new(ancestors: %w[anything], calls: []),
         )
 
@@ -138,7 +126,7 @@ module CleoQualityReview
       in_tmpdir do |dir|
         resolver = build_resolver(
           env: base_env(dir),
-          client: FakeReviewsClient.new(status_code: 500, reviews_json: "boom", requested_paths: []),
+          client: FakeCommentsClient.new(status_code: 500, comments_json: "boom", requested_paths: []),
           git: FakeGit.new(ancestors: [], calls: []),
         )
 
@@ -146,21 +134,21 @@ module CleoQualityReview
       end
     end
 
-    def test_requests_reviews_for_the_pull_request
+    def test_requests_comments_for_the_pull_request
       in_tmpdir do |dir|
-        client = FakeReviewsClient.new(reviews_json: reviews_json, requested_paths: [])
-        build_resolver(env: base_env(dir), client: client, git: FakeGit.new(ancestors: %w[sha2], calls: [])).resolve
+        client = FakeCommentsClient.new(comments_json: sticky_comment_json("sha1"), requested_paths: [])
+        build_resolver(env: base_env(dir), client: client, git: FakeGit.new(ancestors: %w[sha1], calls: [])).resolve
 
-        assert_equal "/repos/owner/repo/pulls/42/reviews?per_page=100&page=1", client.requested_paths.first
+        assert_equal "/repos/owner/repo/issues/42/comments?per_page=100&page=1", client.requested_paths.first
       end
     end
 
-    def test_ignores_a_forged_marker_from_a_non_bot_review
+    def test_ignores_a_forged_marker_from_a_non_bot_comment
       in_tmpdir do |dir|
-        forged = JSON.generate([{ "body" => "<!-- cleo-quality-review:forged -->", "user" => { "type" => "User" }, "commit_id" => "forged-sha", "submitted_at" => "2026-07-01T10:00:00Z" }])
+        forged = JSON.generate([{ "body" => "<!-- cleo-quality-review: commit=forged-sha -->", "user" => { "type" => "User" } }])
         resolver = build_resolver(
           env: base_env(dir),
-          client: FakeReviewsClient.new(reviews_json: forged, requested_paths: []),
+          client: FakeCommentsClient.new(comments_json: forged, requested_paths: []),
           git: FakeGit.new(ancestors: %w[forged-sha], calls: []),
         )
 
@@ -168,12 +156,12 @@ module CleoQualityReview
       end
     end
 
-    def test_follows_pagination_to_find_a_review_beyond_the_first_page
+    def test_follows_pagination_to_find_the_sticky_comment_beyond_the_first_page
       in_tmpdir do |dir|
-        pages = { 1 => full_page_of_non_quality_reviews, 2 => page_with_quality_review("sha-late") }
+        pages = { 1 => full_page_of_other_comments, 2 => sticky_comment_json("sha-late") }
         resolver = build_resolver(
           env: base_env(dir),
-          client: PaginatedReviewsClient.new(pages: pages, requested_paths: []),
+          client: PaginatedCommentsClient.new(pages: pages, requested_paths: []),
           git: FakeGit.new(ancestors: %w[sha-late], calls: []),
         )
 
@@ -209,22 +197,14 @@ module CleoQualityReview
       path
     end
 
-    def reviews_json
+    def sticky_comment_json(commit_sha)
       JSON.generate(
-        [
-          { "body" => "<!-- cleo-quality-review:aaa -->", "user" => { "type" => "Bot" }, "commit_id" => "sha1", "submitted_at" => "2026-07-01T10:00:00Z" },
-          { "body" => "Looks good to me", "user" => { "type" => "User" }, "commit_id" => "human-sha", "submitted_at" => "2026-07-01T11:00:00Z" },
-          { "body" => "<!-- cleo-quality-review:bbb -->", "user" => { "type" => "Bot" }, "commit_id" => "sha2", "submitted_at" => "2026-07-01T12:00:00Z" },
-        ],
+        [{ "body" => "<!-- cleo-quality-review: commit=#{commit_sha} -->\n\nSome findings", "user" => { "type" => "Bot" } }],
       )
     end
 
-    def full_page_of_non_quality_reviews
-      JSON.generate(Array.new(IncrementalBaseResolver::REVIEWS_PER_PAGE) { { "body" => "chatter", "user" => { "type" => "User" } } })
-    end
-
-    def page_with_quality_review(commit_id)
-      JSON.generate([{ "body" => "<!-- cleo-quality-review:late -->", "user" => { "type" => "Bot" }, "commit_id" => commit_id, "submitted_at" => "2026-07-02T00:00:00Z" }])
+    def full_page_of_other_comments
+      JSON.generate(Array.new(IncrementalBaseResolver::COMMENTS_PER_PAGE) { { "body" => "chatter", "user" => { "type" => "User" } } })
     end
   end
 end

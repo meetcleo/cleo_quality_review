@@ -51,6 +51,15 @@ module CleoQualityReview
       request_json(:post, uri_for(path), body)
     end
 
+    ##
+    # Perform an authenticated PATCH request
+    # @param [String] path API path beginning with "/"
+    # @param [Hash] body request body serialised as JSON
+    # @return [Response]
+    def patch(path, body)
+      request_json(:patch, uri_for(path), body)
+    end
+
     private
 
     attr_reader :token, :api_url
@@ -74,6 +83,7 @@ module CleoQualityReview
       {
         get: Net::HTTP::Get,
         post: Net::HTTP::Post,
+        patch: Net::HTTP::Patch,
       }.fetch(method) { raise ArgumentError, "Unsupported HTTP method #{method.inspect}" }
     end
 

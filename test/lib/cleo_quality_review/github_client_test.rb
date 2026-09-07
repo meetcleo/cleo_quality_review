@@ -47,6 +47,22 @@ module CleoQualityReview
       assert_equal JSON.generate({ event: "COMMENT" }), captured.fetch(:request).body
     end
 
+    def test_patch_serialises_the_body_as_json
+      client = GitHubClient.new(token: "t", api_url: "https://api.example")
+      captured = capture_request(client, FakeHTTPResponse.new(code: "200", body: "{}"))
+      client.patch("/x", { body: "updated" })
+
+      assert_equal JSON.generate({ body: "updated" }), captured.fetch(:request).body
+    end
+
+    def test_patch_targets_the_expected_uri
+      client = GitHubClient.new(token: "secret", api_url: "https://api.example")
+      captured = capture_request(client, FakeHTTPResponse.new(code: "200", body: "{}"))
+      client.patch("/repos/owner/repo/issues/comments/1", { body: "updated" })
+
+      assert_equal "https://api.example/repos/owner/repo/issues/comments/1", captured.fetch(:uri).to_s
+    end
+
     def test_blank_api_url_falls_back_to_the_default
       client = GitHubClient.new(token: "t", api_url: "")
       captured = capture_request(client, FakeHTTPResponse.new(code: "200", body: "[]"))

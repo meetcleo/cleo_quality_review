@@ -5,7 +5,7 @@ require "optparse"
 require_relative "../cleo_quality_review"
 require_relative "command_runner"
 require_relative "formatter"
-require_relative "github_review_publisher"
+require_relative "sticky_comment_publisher"
 require_relative "incremental_base_resolver"
 require_relative "options"
 require_relative "runner"
@@ -95,7 +95,7 @@ module CleoQualityReview
     def run_publish_pr_review(arguments)
       options = Options.parse(arguments)
       run = RunArtifacts.load(review_id: options.validated_review_id).to_run(**options.run_loading_params)
-      output = GitHubReviewPublisher.new(run: run, rendered_review: rendered_pr_review(options, run)).publish
+      output = StickyCommentPublisher.new(run: run, rendered_review: rendered_pr_review(options, run)).publish
       print_output(output)
       0
     end

@@ -4,23 +4,25 @@ require "json"
 
 require_relative "github_client"
 require_relative "llm_errors"
+require_relative "sticky_comment_builder"
 
 module CleoQualityReview
   ##
   # Resolves the git base for an incremental review.
   #
   # On a pull request that cleo-quality-review has already reviewed, this
-  # returns the most recent previously-reviewed commit that is still an
-  # ancestor of the current head, so only changes made since that review are
-  # analysed. It falls back to +nil+ (meaning "review the full diff") outside a
-  # pull request context, when no prior review survives in history, or on any
-  # lookup error.
+  # returns the previously-reviewed commit recorded on the sticky pull request
+  # comment, provided it is still an ancestor of the current head, so only
+  # changes made since that review are analysed. It falls back to +nil+
+  # (meaning "review the full diff") outside a pull request context, when no
+  # sticky comment survives in history, or on any lookup error.
   class IncrementalBaseResolver
-    REVIEW_MARKER_PREFIX = "<!-- cleo-quality-review:"
+    MARKER_PREFIX = StickyCommentBuilder::MARKER_PREFIX
+    COMMIT_PATTERN = /#{Regexp.escape(MARKER_PREFIX)}\s*commit=(\S+)\s*-->/
     DISABLED_VALUES = %w[0 false no off].freeze
     ENABLED_ENV_KEY = "CLEO_QUALITY_REVIEW_INCREMENTAL"
-    REVIEWS_PER_PAGE = 100
-    MAX_REVIEW_PAGES = 20
+    COMMENTS_PER_PAGE = 100
+    MAX_COMMENT_PAGES = 20
 
     ##
     # @param [CommandRunner] command_runner for executing git commands
@@ -39,7 +41,7 @@ module CleoQualityReview
     def resolve(head: "HEAD")
       return nil unless incremental_lookup_available?
 
-      newest_reviewed_ancestor(head)
+      reviewed_commit(head)
     rescue StandardError => error
       warn("cleo-quality-review: incremental base lookup failed (#{error.message}); reviewing the full diff")
       nil
@@ -55,56 +57,52 @@ module CleoQualityReview
       enabled? && !pull_request_number.nil? && !token.nil? && !repository.nil?
     end
 
-    def newest_reviewed_ancestor(head)
-      reviewed_commit_ids.find { |sha| ancestor?(sha, head) }
+    def reviewed_commit(head)
+      sha = sticky_comment_commit_sha
+      sha if sha && ancestor?(sha, head)
     end
 
-    def reviewed_commit_ids
-      reviews
-        .select { |review| quality_review?(review) }
-        .sort_by { |review| review["submitted_at"].to_s }
-        .reverse
-        .filter_map { |review| review["commit_id"] }
-        .reject { |sha| sha.to_s.strip.empty? }
-        .uniq
+    def sticky_comment_commit_sha
+      sticky_comment = comments.find { |comment| quality_review?(comment) }
+      sticky_comment && sticky_comment.fetch("body").to_s[COMMIT_PATTERN, 1]
     end
 
     ##
-    # Fetch every submitted review, following pagination so the newest reviews
-    # are not missed on pull requests with more than one page of reviews.
+    # Fetch every issue comment, following pagination so our sticky comment is
+    # not missed on pull requests with more than one page of comments.
     # @return [Array<Hash>]
-    def reviews
-      (1..MAX_REVIEW_PAGES).each_with_object([]) do |page, all|
-        page_reviews = reviews_page(page)
-        all.concat(page_reviews)
-        break all if page_reviews.length < REVIEWS_PER_PAGE
+    def comments
+      (1..MAX_COMMENT_PAGES).each_with_object([]) do |page, all|
+        page_comments = comments_page(page)
+        all.concat(page_comments)
+        break all if page_comments.length < COMMENTS_PER_PAGE
       end
     end
 
-    def reviews_page(page)
-      response = client.get("/repos/#{repository}/pulls/#{pull_request_number}/reviews?per_page=#{REVIEWS_PER_PAGE}&page=#{page}")
-      raise Error, "GitHub review lookup returned status #{response.status_code}" unless response.success?
+    def comments_page(page)
+      response = client.get("/repos/#{repository}/issues/#{pull_request_number}/comments?per_page=#{COMMENTS_PER_PAGE}&page=#{page}")
+      raise Error, "GitHub comment lookup returned status #{response.status_code}" unless response.success?
 
       parsed = JSON.parse(response.body)
       parsed.is_a?(Array) ? parsed : []
     end
 
     ##
-    # Only trust bot-authored reviews that carry our marker. A human contributor
-    # could otherwise forge the marker in their own review and steer the base
-    # past changes the tool never analysed.
-    # @param [Hash] review
+    # Only trust a bot-authored comment that carries our marker. A human
+    # contributor could otherwise forge the marker in their own comment and
+    # steer the base past changes the tool never analysed.
+    # @param [Hash] comment
     # @return [Boolean]
-    def quality_review?(review)
-      bot_authored?(review) && marked?(review)
+    def quality_review?(comment)
+      bot_authored?(comment) && marked?(comment)
     end
 
-    def bot_authored?(review)
-      review.dig("user", "type") == "Bot"
+    def bot_authored?(comment)
+      comment.dig("user", "type") == "Bot"
     end
 
-    def marked?(review)
-      review.fetch("body") { "" }.to_s.include?(REVIEW_MARKER_PREFIX)
+    def marked?(comment)
+      comment.fetch("body") { "" }.to_s.include?(MARKER_PREFIX)
     end
 
     def ancestor?(sha, head)

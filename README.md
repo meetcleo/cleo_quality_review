@@ -86,11 +86,11 @@ On a pull request that has already been reviewed, `analyze` diffs against the mo
 Only code changed since that review is re-analysed, so findings on unchanged code are not repeated on every push.
 The first review of a pull request still covers the whole diff.
 
-The previously-reviewed commit is read from the pull request's existing reviews via the GitHub API.
+The previously-reviewed commit is read from the marker on the pull request's sticky quality-review comment via the GitHub API.
 The `analyze` step therefore needs `GITHUB_TOKEN` in its environment, alongside the `GITHUB_EVENT_PATH` and `GITHUB_REPOSITORY` variables that GitHub Actions provides automatically.
 Without a token, or outside a pull request, `analyze` falls back to the full `origin/main` diff.
 
-If a force-push rewrites the branch, the newest previously-reviewed commit that is still an ancestor of `HEAD` is used, and the review falls back to the full diff when none survive.
+If a force-push rewrites the branch such that the previously-reviewed commit is no longer an ancestor of `HEAD`, the review falls back to the full diff.
 
 Set `CLEO_QUALITY_REVIEW_INCREMENTAL=0` (or `false`, `no`, `off`) to disable incremental re-review and always analyse the full diff.
 
@@ -104,9 +104,9 @@ Checks run in parallel, one worker per CPU core by default. Override with `--job
 
 `github` output uses the GitHub prompt to condense the full report into GitHub workflow annotations for the most relevant findings.
 
-`pr_review` output uses the PR review prompt to condense the full report into JSON for GitHub pull request reviews.
+`pr_review` output uses the PR review prompt to condense the full report into a short JSON narrative summary for a pull request comment.
 
-`publish-pr-review` posts that rendered PR review JSON. Comments that map to commentable right-side diff lines become inline review comments; comments that do not map cleanly are omitted.
+`publish-pr-review` posts that summary as a single sticky pull request comment, editing it in place on every run rather than posting a new comment each time. Exact file/line detail lives in the `github`-format annotations, not in this comment.
 
 ## Prompts
 
