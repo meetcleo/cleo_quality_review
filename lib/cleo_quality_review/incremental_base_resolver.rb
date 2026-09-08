@@ -88,9 +88,7 @@ module CleoQualityReview
     end
 
     ##
-    # Only trust a bot-authored comment that carries our marker. A human
-    # contributor could otherwise forge the marker in their own comment and
-    # steer the base past changes the tool never analysed.
+    # Only trust a bot-authored comment that carries our marker.
     # @param [Hash] comment
     # @return [Boolean]
     def quality_review?(comment)
