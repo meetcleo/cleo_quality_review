@@ -16,6 +16,14 @@ module CleoQualityReview
       end
     end
 
+    def test_local_config_overrides_llm_model
+      in_tmpdir do
+        File.write(".cleo_quality_review.yaml", "LLM:\n  Model: gpt-5-mini\n")
+
+        assert_equal "gpt-5-mini", Configuration.load.llm_model
+      end
+    end
+
     def test_local_config_merges_with_default_config
       in_tmpdir do
         File.write(

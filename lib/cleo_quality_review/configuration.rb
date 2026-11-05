@@ -11,6 +11,8 @@ module CleoQualityReview
     DEFAULT_CONFIG_PATH = File.expand_path("../../config/default.yml", __dir__)
     LOCAL_CONFIG_PATH = ".cleo_quality_review.yaml"
     ALL_TOOLS = "AllTools"
+    LLM = "LLM"
+    MODEL = "Model"
     INCLUDE = "Include"
     EXCLUDE = "Exclude"
     INHERIT_FROM = "inherit_from"
@@ -59,6 +61,12 @@ module CleoQualityReview
     # @param [Hash] data parsed configuration data
     def initialize(data)
       @data = data
+    end
+
+    ##
+    # @return [String, nil] configured LLM model identifier
+    def llm_model
+      data.fetch(LLM) { {} }.fetch(MODEL, nil)&.to_s
     end
 
     ##

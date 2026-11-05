@@ -17,5 +17,12 @@ module CleoQualityReview
       assert_instance_of LlmProviders::OpenAi::Config, config.open_ai_config
       assert_equal "secret", config.open_ai_config.api_key
     end
+
+    def test_open_ai_config_uses_model_from_repository_configuration
+      configuration = Configuration.new("LLM" => { "Model" => "gpt-5-mini" })
+      config = LlmConfig.new(env: {}, configuration: configuration)
+
+      assert_equal "gpt-5-mini", config.open_ai_config.model
+    end
   end
 end

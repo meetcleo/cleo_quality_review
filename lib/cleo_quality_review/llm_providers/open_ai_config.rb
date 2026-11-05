@@ -15,8 +15,10 @@ module CleoQualityReview
 
         ##
         # @param [Hash{String => String}] env environment variables
-        def initialize(env: ENV)
+        # @param [String, nil] model OpenAI model identifier
+        def initialize(env: ENV, model: DEFAULT_MODEL)
           @env = env
+          @model = model
         end
 
         ##
@@ -40,7 +42,7 @@ module CleoQualityReview
 
         ##
         # @return [String] the model identifier to use
-        def model = DEFAULT_MODEL
+        def model = @model || DEFAULT_MODEL
 
         ##
         # @return [Integer] timeout in seconds for OpenAI HTTP requests
