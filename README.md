@@ -129,6 +129,9 @@ Target files are configured with YAML. The gem always loads its default config, 
 inherit_from:
   - ~/.config/cleo_quality_review.yml
 
+LLM:
+  Model: gpt-5-mini
+
 AllTools:
   Include:
     - "**/*.rb"
@@ -150,4 +153,11 @@ All output formats use OpenAI's Responses API.
 | `CLEO_QUALITY_REVIEW_OPEN_AI_KEY` | Yes | OpenAI API key |
 | `CLEO_QUALITY_REVIEW_TIMEOUT_SECONDS` | No | OpenAI request timeout in seconds (default: 180) |
 
-The model is currently fixed to `gpt-5.5`.
+Set the model in the installing repository's `.cleo_quality_review.yaml`:
+
+```yaml
+LLM:
+  Model: gpt-5-mini
+```
+
+The default model is `gpt-5.5`.

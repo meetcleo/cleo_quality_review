@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "configuration"
 require_relative "llm_providers/open_ai_config"
 
 module CleoQualityReview
@@ -10,8 +11,10 @@ module CleoQualityReview
 
     ##
     # @param [Hash{String => String}] env environment variables
-    def initialize(env: ENV)
+    # @param [Configuration] configuration repository configuration
+    def initialize(env: ENV, configuration: Configuration.load)
       @env = env
+      @configuration = configuration
     end
 
     ##
@@ -23,7 +26,7 @@ module CleoQualityReview
     ##
     # @return [LlmProviders::OpenAi::Config]
     def open_ai_config
-      @open_ai_config ||= LlmProviders::OpenAi::Config.new(env: env)
+      @open_ai_config ||= LlmProviders::OpenAi::Config.new(env: env, model: configuration.llm_model)
     end
 
     ##
@@ -35,6 +38,6 @@ module CleoQualityReview
 
     private
 
-    attr_reader :env
+    attr_reader :env, :configuration
   end
 end

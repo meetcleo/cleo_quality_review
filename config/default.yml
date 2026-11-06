@@ -1,3 +1,6 @@
+LLM:
+  Model: gpt-5.5
+
 AllTools:
   Include:
     - "**/*.rb"
